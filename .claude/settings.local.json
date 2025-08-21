@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:map.naver.com)",
+      "WebSearch",
+      "Bash(del \"C:\\Users\\USER\\Documents\\workspace\\naver-store\\scraper-direct.js\")",
+      "Bash(rm:*)",
+      "Bash(node:*)",
+      "Bash(mkdir:*)",
+      "Bash(set ENABLE_LOGGING=false)",
+      "Bash(npm install:*)",
+      "Bash(npx:*)",
+      "WebFetch(domain:search.shopping.naver.com)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

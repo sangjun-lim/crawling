@@ -1,0 +1,33 @@
+{
+  "name": "crawling",
+  "version": "1.0.0",
+  "description": "각종 사이트 크롤링할 수 있는 프로그램",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "crawling",
+    "scraping",
+    "store",
+    "ranking",
+    "naver",
+    "map",
+    "coupang"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "axios-cookiejar-support": "^6.0.4",
+    "cheerio": "^1.0.0-rc.12",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^17.2.1",
+    "playwright": "^1.54.2",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "tough-cookie": "^5.1.2"
+  }
+}
