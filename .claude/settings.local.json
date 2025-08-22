@@ -10,7 +10,11 @@
       "Bash(set ENABLE_LOGGING=false)",
       "Bash(npm install:*)",
       "Bash(npx:*)",
-      "WebFetch(domain:search.shopping.naver.com)"
+      "WebFetch(domain:search.shopping.naver.com)",
+      "Bash(git push:*)",
+      "Bash(mv:*)",
+      "Bash(npm uninstall:*)",
+      "WebFetch(domain:www.npmjs.com)"
     ],
     "deny": [],
     "ask": []

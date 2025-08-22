@@ -22,8 +22,8 @@ async function main() {
     const mode = process.argv[4] || 'map'; // 'map' 또는 'smartstore'
     
     if (mode === 'smartstore') {
-      console.log(`=== 네이버 스마트스토어 상품 검색 ===`);
-      console.log(`검색 키워드: ${keyword}`);
+      console.log(`=== 네이버 스마트스토어 상품 정보 추출 ===`);
+      console.log(`상품 URL: ${keyword}`);
       console.log(`최대 결과: ${maxResults}개\n`);
       
       const smartStoreScraper = new NaverSmartStoreScraper(loggingOptions);

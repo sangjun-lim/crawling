@@ -11,13 +11,14 @@ class NaverSmartStoreScraper {
     };
     
     this.logUtils = new LogUtils(this.options);
-    this.httpClient = new HttpClient(this.options);
+    this.httpClient = new CurlHttpClient(this.options);
+    this.lastSearchUrl = null;
   }
 
-
+  // HttpClient 방식으로 네이버 쇼핑 검색
   async searchNaverShopping(keyword) {
     try {
-      console.log(`네이버 검색: ${keyword}`);
+      console.log(`HttpClient 방식으로 네이버 검색: ${keyword}`);
       
       // 1단계: 네이버 메인 페이지 방문 (쿠키 획득)
       await this.httpClient.get('https://www.naver.com');
@@ -57,7 +58,7 @@ class NaverSmartStoreScraper {
       
       return this.extractSmartStoreLinks(response.data);
     } catch (error) {
-      console.error('네이버 검색 실패:', error.message);
+      console.error('HttpClient 검색 실패:', error.message);
       return [];
     }
   }
@@ -102,23 +103,85 @@ class NaverSmartStoreScraper {
     }
   }
 
-  async scrapeProductInfo(productUrl) {
+  async scrapeProductInfo(productUrl, capturedHeaders = null) {
     try {
       console.log(`상품 정보 수집: ${productUrl}`);
       
-      // 네이버 쇼핑을 통해 먼저 방문 (세션 유지)
-      const refererUrl = 'https://search.shopping.naver.com/search/all';
+      // URL에서 스토어 ID와 상품 ID 추출
+      const linkUrl = new URL(productUrl);
+      const pathParts = linkUrl.pathname.split('/');
+      const storeId = pathParts[1]; // /storeId/products/productId 형태에서 storeId 추출
+      const productId = pathParts[3]; // productId 추출
+      const storeUrl = `https://smartstore.naver.com/${storeId}`;
       
-      const response = await this.httpClient.get(productUrl, {}, {
-        'Referer': refererUrl,
-        'sec-fetch-site': 'same-origin'
-      });
+      console.log(`먼저 스토어 페이지 방문하여 channelUid 추출: ${storeUrl}`);
+      
+      // 1단계: 네이버 메인 페이지 먼저 방문
+      await this.httpClient.get('https://www.naver.com');
+      console.log('네이버 메인 페이지 방문 완료');
+      
+      await this.delay(500);
+      
+      // 2단계: 스토어 메인 페이지 방문하여 channelUid 추출
+      let headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-site',
+        'Sec-Fetch-User': '?1',
+        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'Referer': 'https://www.naver.com/'
+      };
+      
+      const storeResponse = await this.httpClient.get(storeUrl, {}, headers);
+      console.log('스토어 페이지 방문 완료');
+      
+      // channelUid 추출
+      const channelUidMatch = storeResponse.data.match(/"channelUid":"([^"]+)"/);
+      if (!channelUidMatch) {
+        throw new Error('channelUid를 찾을 수 없습니다');
+      }
+      
+      const channelUid = channelUidMatch[1];
+      console.log(`channelUid 추출 완료: ${channelUid}`);
+      
+      await this.delay(1000);
+      
+      // 3단계: API 엔드포인트로 상품 정보 요청
+      const apiUrl = `https://smartstore.naver.com/i/v2/channels/${channelUid}/products/${productId}?withWindow=false`;
+      console.log(`API 요청: ${apiUrl}`);
+      
+      headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'Referer': storeUrl
+      };
+      
+      const apiResponse = await this.httpClient.get(apiUrl, {}, headers);
 
-      if (response.status !== 200) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (apiResponse.status !== 200) {
+        throw new Error(`HTTP ${apiResponse.status}: ${apiResponse.statusText}`);
       }
 
-      return this.parseProductData(response.data, productUrl);
+      return this.parseApiProductData(JSON.parse(apiResponse.data), productUrl);
       
     } catch (error) {
       console.error(`상품 정보 수집 실패 (${productUrl}):`, error.message);
@@ -209,58 +272,29 @@ class NaverSmartStoreScraper {
     return parseInt(price).toLocaleString() + '원';
   }
 
-  async scrapeProducts(keyword, maxResults = 5) {
+  async scrapeProducts(productUrl, maxResults = 5) {
     try {
-      console.log(`네이버 스마트스토어 상품 수집 시작: ${keyword}`);
+      console.log(`네이버 스마트스토어 상품 수집 시작: ${productUrl}`);
       
-      // 1단계: 상품 링크 검색
-      const productLinks = await this.searchNaverShopping(keyword);
-      
-      if (productLinks.length === 0) {
-        console.log('상품 링크를 찾을 수 없습니다.');
-        return [];
+      // URL 유효성 검사
+      if (!productUrl || !productUrl.includes('smartstore.naver.com')) {
+        throw new Error('유효한 스마트스토어 URL이 아닙니다');
       }
-
-      // 2단계: 첫 번째 상품 정보만 수집
+      
+      // 상품 정보 수집
       const products = [];
       
-      if (productLinks.length > 0) {
-        const firstLink = productLinks[0];
-        console.log(`[1/1] 첫 번째 상품 수집 중...`);
-        
-        // URL에서 호스트 추출
-        const linkUrl = new URL(firstLink);
-        
-        const productInfo = await this.httpClient.get(firstLink, {}, {
-          'Host': linkUrl.host,
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-          'Sec-Fetch-Site': 'same-site',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-User': '?1',
-          'Sec-Fetch-Dest': 'document',
-          'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
-          'sec-ch-ua-mobile': '?0',
-          'sec-ch-ua-platform': '"Windows"',
-          'Referer': this.lastSearchUrl || 'https://search.naver.com/',
-          'Accept-Encoding': 'gzip, deflate, br, zstd',
-          'Accept-Language': 'ko-KR,ko;q=0.9'
-          // 쿠키는 HttpClient가 자동으로 관리
-        });
-        
-        if (productInfo && productInfo.status === 200) {
-          const parsedProduct = this.parseProductData(productInfo.data, firstLink);
-          if (parsedProduct) {
-            products.push(parsedProduct);
-          }
-        }
+      console.log(`[1/1] HttpClient로 상품 수집 중: ${productUrl}`);
+      const productInfo = await this.scrapeProductInfo(productUrl);
+      if (productInfo) {
+        products.push(productInfo);
       }
 
-      // 3단계: 결과 저장
+      // 결과 저장
       if (products.length > 0) {
-        await this.saveResults(products, keyword);
+        const urlParts = productUrl.split('/');
+        const productId = urlParts[urlParts.length - 1] || 'unknown';
+        await this.saveResults(products, productId);
       }
 
       console.log(`수집 완료: 총 ${products.length}개 상품`);
@@ -295,6 +329,72 @@ class NaverSmartStoreScraper {
       
     } catch (error) {
       console.error('결과 저장 실패:', error.message);
+    }
+  }
+
+  parseApiProductData(apiData, url) {
+    try {
+      const product = {
+        url: url,
+        title: '',
+        price: '',
+        originalPrice: '',
+        discountRate: '',
+        seller: '',
+        images: [],
+        rating: '',
+        reviewCount: '',
+        deliveryInfo: '',
+        extractedAt: new Date().toISOString()
+      };
+
+      // API 응답에서 상품 정보 추출
+      if (apiData && apiData.product) {
+        const productData = apiData.product;
+        
+        // 상품명
+        product.title = productData.name || '';
+        
+        // 가격 정보
+        if (productData.salePrice) {
+          product.price = this.formatPrice(productData.salePrice.toString());
+        }
+        
+        if (productData.originalPrice) {
+          product.originalPrice = this.formatPrice(productData.originalPrice.toString());
+        }
+        
+        // 할인율
+        if (productData.discountRate) {
+          product.discountRate = productData.discountRate + '%';
+        }
+        
+        // 판매자 정보
+        if (apiData.channel) {
+          product.seller = apiData.channel.name || '';
+        }
+        
+        // 이미지 정보
+        if (productData.images && productData.images.length > 0) {
+          product.images = productData.images.map(img => img.url || img);
+        }
+        
+        // 리뷰 정보
+        if (productData.reviewCount) {
+          product.reviewCount = productData.reviewCount.toString();
+        }
+        
+        if (productData.rating) {
+          product.rating = productData.rating.toString();
+        }
+      }
+
+      console.log(`API 상품 정보 추출 완료: ${product.title}`);
+      return product;
+      
+    } catch (error) {
+      console.error('API 상품 데이터 파싱 실패:', error.message);
+      return null;
     }
   }
 
