@@ -1,0 +1,14 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/ambulance/perfs",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "d93f0283-1681-41e5-bc23-6a877e613e79",
+    "content-length": "2",
+    "date": "Sat, 23 Aug 2025 17:21:45 GMT",
+    "content-type": "text/plain; charset=utf-8",
+    "server": "nginx"
+  },
+  "body": "OK",
+  "timestamp": "2025-08-23T17:21:45.153Z"
+}

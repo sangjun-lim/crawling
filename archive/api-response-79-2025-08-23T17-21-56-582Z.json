@@ -1,0 +1,12 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/target-condition/existence",
+  "status": 204,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "b3a69e10-a075-4f16-981a-0c66fa425cbe",
+    "date": "Sat, 23 Aug 2025 17:21:50 GMT",
+    "server": "nginx"
+  },
+  "body": "",
+  "timestamp": "2025-08-23T17:21:51.074Z"
+}

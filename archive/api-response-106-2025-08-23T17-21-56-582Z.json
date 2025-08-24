@@ -1,0 +1,14 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/deliveries/notice",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "20d54fca-0785-4fa1-833d-9e6469292973",
+    "content-length": "2",
+    "date": "Sat, 23 Aug 2025 17:21:51 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "server": "nginx"
+  },
+  "body": "{}",
+  "timestamp": "2025-08-23T17:21:51.387Z"
+}

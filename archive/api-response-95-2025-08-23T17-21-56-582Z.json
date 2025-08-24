@@ -1,0 +1,15 @@
+{
+  "url": "https://api-shopping-kitcat.io.naver.com/v1/pixel/subscriptions/by-channels/2sWDxR7klq0gCXmcpWBd4",
+  "status": 200,
+  "headers": {
+    "access-control-allow-origin": "https://smartstore.naver.com",
+    "content-encoding": "gzip",
+    "date": "Sat, 23 Aug 2025 17:21:51 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "vary": "Accept-Encoding,Origin",
+    "x-powered-by": "Express",
+    "access-control-allow-credentials": "true"
+  },
+  "body": "{\"contents\":{\"metaCollaborativeAdsCommerceSolutionYn\":false}}",
+  "timestamp": "2025-08-23T17:21:51.141Z"
+}

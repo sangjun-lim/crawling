@@ -1,0 +1,15 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/naver-membership?includedPayMembership=false",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "558f0234-b7b2-4ab8-a07f-dc3783b0dc02",
+    "content-encoding": "gzip",
+    "date": "Sat, 23 Aug 2025 17:21:50 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "vary": "Accept-Encoding",
+    "server": "nginx"
+  },
+  "body": "{\"isSubscribed\":false,\"payMembership\":null,\"expectBenefit\":null}",
+  "timestamp": "2025-08-23T17:21:50.817Z"
+}

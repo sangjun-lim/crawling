@@ -1,0 +1,14 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/contents/reviews/exceptional-storepick-review-ids",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "7be8885a-9109-4746-a78b-91710de65993",
+    "content-length": "14",
+    "date": "Sat, 23 Aug 2025 17:21:51 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "server": "nginx"
+  },
+  "body": "[\"4732247186\"]",
+  "timestamp": "2025-08-23T17:21:51.227Z"
+}

@@ -1,0 +1,15 @@
+{
+  "url": "https://smartstore.naver.com/i/v2/channels/2sWDxR7klq0gCXmcpWBd4/benefits/by-products/7551702413?categoryId=50003299",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "5346c7eb-2d5d-4702-afc6-991672254ce8",
+    "content-encoding": "gzip",
+    "date": "Sat, 23 Aug 2025 17:21:51 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "vary": "Accept-Encoding",
+    "server": "nginx"
+  },
+  "body": "{\"basicBenefits\":[],\"sortedHomeBenefits\":[]}",
+  "timestamp": "2025-08-23T17:21:51.188Z"
+}

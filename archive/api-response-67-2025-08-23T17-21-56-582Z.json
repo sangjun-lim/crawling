@@ -1,0 +1,14 @@
+{
+  "url": "https://smartstore.naver.com/i/v2/channels/2sWDxR7klq0gCXmcpWBd4/live/existence",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "e1bca2a3-c43c-487c-8843-2d37ce0ce146",
+    "content-length": "5",
+    "date": "Sat, 23 Aug 2025 17:21:50 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "server": "nginx"
+  },
+  "body": "false",
+  "timestamp": "2025-08-23T17:21:50.844Z"
+}

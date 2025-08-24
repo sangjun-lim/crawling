@@ -1,0 +1,12 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/carts/user/count",
+  "status": 204,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "812ab88c-bf35-4620-8046-9b3dc964c73a",
+    "date": "Sat, 23 Aug 2025 17:21:50 GMT",
+    "server": "nginx"
+  },
+  "body": "",
+  "timestamp": "2025-08-23T17:21:50.859Z"
+}

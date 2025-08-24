@@ -1,0 +1,15 @@
+{
+  "url": "https://smartstore.naver.com/i/v2/channels/2sWDxR7klq0gCXmcpWBd4/benefits/seller-exceptions",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "de565020-08d1-4f98-8e36-6ad4e27389bd",
+    "content-encoding": "gzip",
+    "date": "Sat, 23 Aug 2025 17:21:50 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "vary": "Accept-Encoding",
+    "server": "nginx"
+  },
+  "body": "{\"isAdminCouponExceptional\":false}",
+  "timestamp": "2025-08-23T17:21:50.845Z"
+}

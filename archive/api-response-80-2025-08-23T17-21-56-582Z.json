@@ -1,0 +1,15 @@
+{
+  "url": "https://smartstore.naver.com/i/v2/channels/2sWDxR7klq0gCXmcpWBd4/keep-stores",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "d38c60d1-02af-4f16-b6ca-44c78610e021",
+    "content-encoding": "gzip",
+    "date": "Sat, 23 Aug 2025 17:21:51 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "vary": "Accept-Encoding",
+    "server": "nginx"
+  },
+  "body": "{\"kept\":false,\"count\":638,\"newsInterlock\":false,\"hasTooltip\":false}",
+  "timestamp": "2025-08-23T17:21:51.104Z"
+}

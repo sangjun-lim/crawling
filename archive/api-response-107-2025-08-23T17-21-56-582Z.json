@@ -1,0 +1,15 @@
+{
+  "url": "https://smartstore.naver.com/i/v1/deliveries/simulator-prediction?merchantId=ncp_1npj1g_01&productNo=7588460081&largeCategoryId=50000004&middleCategoryId=50000105&smallCategoryId=50001240&sourceAddress=%EA%B2%BD%EA%B8%B0%EB%8F%84+%EC%8B%9C%ED%9D%A5%EC%8B%9C+%EA%B5%B0%EC%9E%90%EB%A1%9C315%EB%B2%88%EA%B8%B8+27+(%EC%9A%B0+:+15004)+&targetAddress=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C&targetZipcd=06236&isTodayDispatchProduct=true&isTodayDispatchable=false",
+  "status": 200,
+  "headers": {
+    "cache-control": "no-cache, no-store, must-revalidate",
+    "requestid": "093a0b0c-eb58-49ac-a56e-3d14c51d9b00",
+    "content-encoding": "gzip",
+    "date": "Sat, 23 Aug 2025 17:21:51 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "vary": "Accept-Encoding",
+    "server": "nginx"
+  },
+  "body": "{\"totalPayCountByMerchant\":2175,\"predictionDate\":\"2025-08-27\",\"predictionForDay\":0.96,\"productNo\":\"7588460081\",\"status\":\"SUCCESS\",\"nowDate\":\"2025-08-24 02:21:51\"}",
+  "timestamp": "2025-08-23T17:21:51.387Z"
+}
