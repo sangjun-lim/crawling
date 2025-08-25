@@ -1,3 +1,4 @@
+import BaseScraper from './BaseScraper.js';
 import HttpClient from './HttpClient.js';
 import CategoryDetector from './CategoryDetector.js';
 import GraphQLBuilder from '../graphql/GraphQLBuilder.js';
@@ -6,8 +7,10 @@ import CoordinateUtils from '../utils/CoordinateUtils.js';
 import FileUtils from '../utils/FileUtils.js';
 import { DEFAULT_COORDS, DEFAULT_OPTIONS, API_URLS } from '../config/constants.js';
 
-class NaverStoreScraper {
+class NaverStoreScraper extends BaseScraper {
   constructor(options = {}) {
+    super(options);
+    
     this.config = {
       defaultCoords: DEFAULT_COORDS,
       pagination: {
@@ -18,7 +21,10 @@ class NaverStoreScraper {
       ...options
     };
 
-    this.httpClient = new HttpClient(options);
+    this.httpClient = new HttpClient({
+      ...options,
+      proxy: this.getHttpProxyConfig(), // 프록시 설정 전달
+    });
     this.categoryDetector = new CategoryDetector();
     this.graphQLBuilder = new GraphQLBuilder();
     this.responseParser = new ResponseParser();

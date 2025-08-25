@@ -7,16 +7,21 @@ async function main() {
   console.log(`🚀 프로그램 시작: ${new Date().toLocaleString()}`);
   
   // .env 파일에서 설정값 읽어오기
-  const loggingOptions = {
+  const scraperOptions = {
+    // 로깅 옵션
     enableLogging: process.env.ENABLE_LOGGING !== 'false', // 기본 활성화
     logRequests: process.env.LOG_REQUESTS !== 'false',
     logResponses: process.env.LOG_RESPONSES !== 'false', 
     logErrors: process.env.LOG_ERRORS !== 'false',
     logDirectory: process.env.LOG_DIRECTORY || 'log',
-    // 스크래핑 옵션도 .env에서 가져오기
+    
+    // 스크래핑 옵션
     maxPages: parseInt(process.env.MAX_PAGES) || 5,
     timeout: parseInt(process.env.TIMEOUT) || 30000,
-    maxRedirects: parseInt(process.env.MAX_REDIRECTS) || 5
+    maxRedirects: parseInt(process.env.MAX_REDIRECTS) || 5,
+    
+    // 프록시 옵션
+    proxy: process.env.PROXY_SERVER || null,
   };
 
   try {
@@ -27,16 +32,23 @@ async function main() {
     if (mode === 'smartstore') {
       console.log(`=== 네이버 스마트스토어 상품 정보 추출 ===`);
       console.log(`상품 URL: ${keywordOrUrl}`);
+      if (scraperOptions.proxy) {
+        console.log(`🔗 프록시: ${scraperOptions.proxy}`);
+      }
       
-      const smartStoreScraper = new NaverSmartStoreScraper(loggingOptions);
+      const smartStoreScraper = new NaverSmartStoreScraper(scraperOptions);
       await smartStoreScraper.scrapeProductsBySearch(keywordOrUrl);
       
     } else if (mode === 'map') {
       console.log(`=== 네이버 지도 매장 순위 추출 ===`);
       console.log(`검색 키워드: ${keywordOrUrl}`);
-      console.log(`최대 결과 수: ${maxResults}\n`);
+      console.log(`최대 결과 수: ${maxResults}`);
+      if (scraperOptions.proxy) {
+        console.log(`🔗 프록시: ${scraperOptions.proxy}`);
+      }
+      console.log();
       
-      const scraper = new NaverStoreScraper(loggingOptions);
+      const scraper = new NaverStoreScraper(scraperOptions);
       const results = await scraper.searchStores(keywordOrUrl, maxResults);
       
       if (results.stores.length > 0) {

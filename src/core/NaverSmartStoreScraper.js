@@ -1,15 +1,17 @@
+import BaseScraper from './BaseScraper.js';
 import { chromium } from 'playwright';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 
-class NaverSmartStoreScraper {
+class NaverSmartStoreScraper extends BaseScraper {
   constructor(options = {}) {
+    super(options);
+    
     this.options = {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 500,
       saveData: options.saveData ?? true,
-      proxy: options.proxy ?? null,
       ...options,
     };
 
@@ -21,7 +23,10 @@ class NaverSmartStoreScraper {
 
   async init() {
     try {
-      console.log('Playwright 브라우저 초기화 중...');
+      // 부모 클래스 초기화 (프록시 테스트 포함)
+      await super.init();
+      
+      this.logInfo('Playwright 브라우저 초기화 중...');
 
       const launchOptions = {
         headless: this.options.headless,
@@ -36,9 +41,11 @@ class NaverSmartStoreScraper {
         ],
       };
 
-      if (this.options.proxy) {
-        launchOptions.proxy = { server: this.options.proxy };
-        console.log(`🔗 프록시 설정: ${this.options.proxy}`);
+      // 프록시 설정 적용
+      const playwrightProxyConfig = this.getPlaywrightProxyConfig();
+      if (playwrightProxyConfig) {
+        launchOptions.proxy = playwrightProxyConfig;
+        this.logInfo(`프록시 설정 적용: ${playwrightProxyConfig.server}`);
       }
 
       this.browser = await chromium.launch(launchOptions);
@@ -59,10 +66,10 @@ class NaverSmartStoreScraper {
       this.setupApiMonitoring();
       await this.setupAntiDetection();
 
-      console.log('Playwright 초기화 완료');
+      this.logSuccess('Playwright 초기화 완료');
       return true;
     } catch (error) {
-      console.error('Playwright 초기화 실패:', error.message);
+      this.logError(`Playwright 초기화 실패: ${error.message}`);
       return false;
     }
   }
@@ -636,9 +643,12 @@ class NaverSmartStoreScraper {
         await this.browser.close();
         this.browser = null;
       }
-      console.log('Playwright 브라우저 종료 완료');
+      this.logSuccess('Playwright 브라우저 종료 완료');
+      
+      // 부모 클래스 정리 호출
+      await super.close();
     } catch (error) {
-      console.error('Playwright 브라우저 종료 실패:', error.message);
+      this.logError(`Playwright 브라우저 종료 실패: ${error.message}`);
     }
   }
 }
