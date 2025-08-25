@@ -20,29 +20,32 @@ async function main() {
   };
 
   try {
-    const keyword = process.argv[2] || '치킨';
-    const maxResults = parseInt(process.argv[3]) || 5;
-    const mode = process.argv[4] || 'map'; // 'map' 또는 'smartstore'
+    const mode = process.argv[2] || 'map'; // 'map' 또는 'smartstore'
+    const keywordOrUrl = process.argv[3] || '치킨';
+    const maxResults = parseInt(process.argv[4]) || 5;
     
     if (mode === 'smartstore') {
       console.log(`=== 네이버 스마트스토어 상품 정보 추출 ===`);
-      console.log(`상품 URL: ${keyword}`);
+      console.log(`상품 URL: ${keywordOrUrl}`);
       
       const smartStoreScraper = new NaverSmartStoreScraper(loggingOptions);
-      // await smartStoreScraper.scrapeProducts(keyword, maxResults);
-      await smartStoreScraper.scrapeProductsBySearch(keyword);
+      await smartStoreScraper.scrapeProductsBySearch(keywordOrUrl);
       
-    } else {
+    } else if (mode === 'map') {
       console.log(`=== 네이버 지도 매장 순위 추출 ===`);
-      console.log(`검색 키워드: ${keyword}\n`);
+      console.log(`검색 키워드: ${keywordOrUrl}`);
+      console.log(`최대 결과 수: ${maxResults}\n`);
       
       const scraper = new NaverStoreScraper(loggingOptions);
-      const results = await scraper.searchStores(keyword, maxResults);
+      const results = await scraper.searchStores(keywordOrUrl, maxResults);
       
       if (results.stores.length > 0) {
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        await scraper.saveToCsv(results, `naver_stores_${keyword}_${timestamp}.csv`);
+        await scraper.saveToCsv(results, `naver_stores_${keywordOrUrl}_${timestamp}.csv`);
       }
+    } else {
+      console.log('❌ 지원되지 않는 모드입니다. "map" 또는 "smartstore"를 사용하세요.');
+      console.log('📖 사용법: node index.js [map|smartstore] [keyword|url] [maxResults]');
     }
     
   } catch (error) {

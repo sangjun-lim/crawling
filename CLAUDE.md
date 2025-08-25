@@ -10,24 +10,22 @@ A Node.js web scraping application that extracts business ranking data from Nave
 
 ### Development
 ```bash
-# Run the scraper with default keyword (치킨)
+# Run the scraper with default settings (map mode, keyword: 치킨)
 npm start
 
-# Run Naver Map scraper with custom keyword
-node index.js [keyword] [maxResults] map
-
-# Run Naver Smart Store scraper
-node index.js [keyword] [maxResults] smartstore
+# Run with specific mode, keyword/URL, and max results
+node index.js [map|smartstore] [keyword|url] [maxResults]
 
 # Example searches - Naver Map
-node index.js "강남 맛집" 10 map
-node index.js "카페" 50 map
-node index.js "미용실" 20 map
+node index.js map "강남 맛집" 10
+node index.js map "카페" 50
+node index.js map "미용실" 20
 
 # Example searches - Smart Store
-node index.js "사무용 의자" 5 smartstore
-node index.js "노트북" 10 smartstore
-node index.js "스마트폰" 3 smartstore
+node index.js smartstore "https://smartstore.naver.com/wodnr7762/products/8464846750"
+node index.js smartstore "https://smartstore.naver.com/store123/products/123456"
+
+# Note: maxResults is only used in map mode
 ```
 
 ### Configuration
