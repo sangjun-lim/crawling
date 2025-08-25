@@ -281,6 +281,11 @@ class NaverSmartStoreScraper {
           name: apiData.category?.categoryName,
           fullPath: apiData.category?.wholeCategoryName,
         },
+        productDeliveryInfo: {
+          baseFee: apiData.productDeliveryInfo?.baseFee,
+          deliveryFeePayType: apiData.productDeliveryInfo.deliveryFeePayType,
+          repeatQuantity: apiData.productDeliveryInfo.repeatQuantity,
+        },
         options:
           apiData.optionCombinations?.map((option) => ({
             id: option.id,
