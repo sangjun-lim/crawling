@@ -7,6 +7,7 @@ class NaverSmartStoreScraper {
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 500,
       saveData: options.saveData ?? true,
+      proxy: options.proxy ?? null,
       ...options,
     };
 
@@ -20,7 +21,7 @@ class NaverSmartStoreScraper {
     try {
       console.log('Playwright 브라우저 초기화 중...');
 
-      this.browser = await chromium.launch({
+      const launchOptions = {
         headless: this.options.headless,
         slowMo: this.options.slowMo,
         args: [
@@ -31,7 +32,14 @@ class NaverSmartStoreScraper {
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
         ],
-      });
+      };
+
+      if (this.options.proxy) {
+        launchOptions.proxy = { server: this.options.proxy };
+        console.log(`🔗 프록시 설정: ${this.options.proxy}`);
+      }
+
+      this.browser = await chromium.launch(launchOptions);
 
       this.context = await this.browser.newContext({
         userAgent:
@@ -46,46 +54,8 @@ class NaverSmartStoreScraper {
 
       this.page = await this.context.newPage();
 
-      // 네트워크 모니터링 (API 응답 수집)
-      this.apiResponses = [];
-      this.page.on('response', async (response) => {
-        const url = response.url();
-        if (url.includes('/products/') && url.includes('?withWindow=false')) {
-          try {
-            const responseBody = await response.text();
-            this.apiResponses.push({
-              url: url,
-              status: response.status(),
-              data: JSON.parse(responseBody),
-              timestamp: new Date().toISOString(),
-            });
-            console.log(`📡 상품 API 응답 수집: ${response.status()}`);
-          } catch (e) {
-            console.log(`❌ API 응답 파싱 실패: ${e.message}`);
-          }
-        }
-      });
-
-      // 자동화 감지 우회
-      await this.page.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', {
-          get: () => undefined,
-        });
-
-        delete navigator.__proto__.webdriver;
-
-        window.chrome = {
-          runtime: {},
-        };
-
-        Object.defineProperty(navigator, 'languages', {
-          get: () => ['ko-KR', 'ko', 'en'],
-        });
-
-        Object.defineProperty(navigator, 'plugins', {
-          get: () => [1, 2, 3, 4, 5],
-        });
-      });
+      this.setupApiMonitoring();
+      await this.setupAntiDetection();
 
       console.log('Playwright 초기화 완료');
       return true;
@@ -93,6 +63,49 @@ class NaverSmartStoreScraper {
       console.error('Playwright 초기화 실패:', error.message);
       return false;
     }
+  }
+
+  setupApiMonitoring() {
+    this.apiResponses = [];
+    this.page.on('response', async (response) => {
+      const url = response.url();
+      if (url.includes('/products/') && url.includes('?withWindow=false')) {
+        try {
+          const responseBody = await response.text();
+          this.apiResponses.push({
+            url: url,
+            status: response.status(),
+            data: JSON.parse(responseBody),
+            timestamp: new Date().toISOString(),
+          });
+          console.log(`📡 상품 API 응답 수집: ${response.status()}`);
+        } catch (e) {
+          console.log(`❌ API 응답 파싱 실패: ${e.message}`);
+        }
+      }
+    });
+  }
+
+  async setupAntiDetection() {
+    await this.page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+
+      delete navigator.__proto__.webdriver;
+
+      window.chrome = {
+        runtime: {},
+      };
+
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['ko-KR', 'ko', 'en'],
+      });
+
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+    });
   }
 
   /**
@@ -119,53 +132,8 @@ class NaverSmartStoreScraper {
       await this.page.waitForTimeout(2000);
       console.log('✅ 메인페이지 로딩 완료');
 
-      // 2단계: 타겟 상품 찾기 및 클릭
-      console.log('2️⃣ 타겟 상품 링크 찾는 중...');
-
-      const productSelectors = [
-        `a[href*="${productId}"]`,
-        `a[href*="/products/${productId}"]`,
-      ];
-
-      let productFound = false;
-      for (const selector of productSelectors) {
-        try {
-          const elements = await this.page.$$(selector);
-          if (elements.length > 0) {
-            console.log(`✅ 타겟 상품 링크 발견: ${selector}`);
-            await elements[0].click();
-            productFound = true;
-            break;
-          }
-        } catch (e) {
-          console.log(`🔍 선택자 시도: ${selector} - 실패`);
-        }
-      }
-
-      if (!productFound) {
-        console.log(
-          '⚠️ 메인페이지에서 상품을 찾을 수 없음. 직접 접근을 시도합니다...'
-        );
-
-        // 직접 상품 URL로 접근
-        const directProductUrl = `https://smartstore.naver.com/${storeId}/products/${productId}`;
-        console.log(`🔗 직접 접근 URL: ${directProductUrl}`);
-
-        await this.page.goto(directProductUrl, {
-          waitUntil: 'networkidle',
-          timeout: this.options.timeout,
-        });
-
-        await this.page.waitForTimeout(2000);
-
-        // 직접 접근이 성공했는지 확인
-        const currentUrl = this.page.url();
-        if (!currentUrl.includes(productId)) {
-          throw new Error(`직접 접근도 실패했습니다. URL: ${currentUrl}`);
-        }
-
-        console.log('✅ 직접 접근 성공');
-      }
+      // 2단계: 상품 접근
+      await this.navigateToProduct(storeId, productId);
 
       // 3단계: 상품 페이지 로딩 대기
       console.log('3️⃣ 상품 페이지 로딩 대기 중...');
@@ -179,24 +147,29 @@ class NaverSmartStoreScraper {
         throw new Error(`상품 페이지 접근 실패: ${finalUrl}`);
       }
 
-      // 4단계: 상품 데이터 추출
-      console.log('4️⃣ 상품 데이터 추출 중...');
-      const productData = await this.extractProductData();
-
-      // 5단계: API 응답에서 추가 데이터 추출
-      console.log('5️⃣ API 응답 데이터 처리 중...');
+      // 4단계: API 데이터 추출 (우선)
+      console.log('4️⃣ API 데이터 추출 중...');
       const apiData = await this.processApiResponse(productId);
 
-      // 최종 데이터 조합 (API 데이터 우선)
-      const finalData = {
-        ...productData,
+      let finalData = {
         ...apiData,
-        // API 데이터가 없을 경우만 HTML 데이터 사용
-        title: apiData.name || productData.title,
-        price: apiData.salePrice || productData.price,
         crawledAt: new Date().toISOString(),
         url: finalUrl,
+        method: 'api',
       };
+
+      // API 데이터가 불충분한 경우 HTML fallback 사용
+      if (!apiData.name && !apiData.salePrice) {
+        console.log('5️⃣ API 데이터 부족, HTML fallback 시도...');
+        const htmlData = await this.extractFallbackData();
+        finalData = {
+          ...htmlData,
+          ...apiData, // API에서 얻은 데이터는 유지
+          crawledAt: new Date().toISOString(),
+          url: finalUrl,
+          method: 'html_fallback',
+        };
+      }
 
       return finalData;
     } catch (error) {
@@ -212,6 +185,57 @@ class NaverSmartStoreScraper {
 
       throw error;
     }
+  }
+
+  async navigateToProduct(storeId, productId) {
+    console.log('2️⃣ 타겟 상품 링크 찾는 중...');
+
+    const productSelectors = [
+      `a[href*="${productId}"]`,
+      `a[href*="/products/${productId}"]`,
+    ];
+
+    let productFound = false;
+    for (const selector of productSelectors) {
+      try {
+        const elements = await this.page.$$(selector);
+        if (elements.length > 0) {
+          console.log(`✅ 타겟 상품 링크 발견: ${selector}`);
+          await elements[0].click();
+          productFound = true;
+          break;
+        }
+      } catch (e) {
+        console.log(`🔍 선택자 시도: ${selector} - 실패`);
+      }
+    }
+
+    if (!productFound) {
+      await this.navigateDirectly(storeId, productId);
+    }
+  }
+
+  async navigateDirectly(storeId, productId) {
+    console.log(
+      '⚠️ 메인페이지에서 상품을 찾을 수 없음. 직접 접근을 시도합니다...'
+    );
+
+    const directProductUrl = `https://smartstore.naver.com/${storeId}/products/${productId}`;
+    console.log(`🔗 직접 접근 URL: ${directProductUrl}`);
+
+    await this.page.goto(directProductUrl, {
+      waitUntil: 'networkidle',
+      timeout: this.options.timeout,
+    });
+
+    await this.page.waitForTimeout(2000);
+
+    const currentUrl = this.page.url();
+    if (!currentUrl.includes(productId)) {
+      throw new Error(`직접 접근도 실패했습니다. URL: ${currentUrl}`);
+    }
+
+    console.log('✅ 직접 접근 성공');
   }
 
   /**
@@ -246,7 +270,7 @@ class NaverSmartStoreScraper {
         productNo: apiData.productNo,
         name: apiData.name,
         salePrice: apiData.salePrice,
-        originalPrice: apiData.dispSalePrice,
+        dispSalePrice: apiData.dispSalePrice,
         discountedSalePrice: apiData.benefitsView?.discountedSalePrice,
         discountedRatio: apiData.benefitsView?.discountedRatio,
         stockQuantity: apiData.stockQuantity,
@@ -272,10 +296,11 @@ class NaverSmartStoreScraper {
             order: img.order,
             type: img.imageType,
           })) || [],
-        seller: {
+        channel: {
           name: apiData.channel?.channelName,
           id: apiData.channel?.channelSiteUrl,
         },
+        sellerTags: apiData.sellerTags || [],
         attributes:
           apiData.productAttributes?.map((attr) => ({
             name: attr.attributeName,
@@ -292,95 +317,66 @@ class NaverSmartStoreScraper {
   }
 
   /**
-   * HTML에서 상품 데이터 추출
+   * HTML에서 fallback 데이터 추출 (API 실패 시만 사용)
    */
-  async extractProductData() {
-    console.log('📄 HTML에서 데이터 추출 중...');
-
-    const data = {
-      title: null,
-      price: null,
-      originalPrice: null,
-      discount: null,
-      description: null,
-      images: [],
-      options: [],
-      brand: null,
-      seller: null,
-    };
+  async extractFallbackData() {
+    console.log('📄 HTML fallback 데이터 추출 중...');
 
     try {
-      // DOM에서 직접 데이터 추출
       const productInfo = await this.page.evaluate(() => {
-        const data = {};
-
-        // 상품명 추출 - 더 구체적인 선택자 사용
-        const titleSelectors = [
-          'h1',
-          '[class*="prod_buy_header"] h3',
-          '[class*="product"] h1',
-          '.product_title',
-        ];
-
-        for (const selector of titleSelectors) {
-          const element = document.querySelector(selector);
-          if (element && element.textContent.trim()) {
-            data.title = element.textContent.trim();
-            break;
+        // 유틸리티 함수들
+        const extractElementText = (selectors) => {
+          for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+              return element.textContent.trim();
+            }
           }
-        }
+          return null;
+        };
 
-        // 가격 정보 추출 - 더 정확한 선택자
-        const priceSelectors = [
-          '.price_area .price',
-          '.total_price',
-          '[class*="price"]:not([class*="original"])',
-          '.sale_price',
-        ];
-
-        for (const selector of priceSelectors) {
-          const elements = document.querySelectorAll(selector);
-          for (const element of elements) {
-            const text = element.textContent;
-            if (text && text.includes('원')) {
-              const priceMatch = text.match(/[\d,]+/);
-              if (priceMatch) {
-                const price = parseInt(priceMatch[0].replace(/,/g, ''));
-                if (!data.price || price < data.price) {
-                  data.price = price;
+        const extractPrice = (selectors) => {
+          for (const selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            for (const element of elements) {
+              const text = element.textContent;
+              if (text && text.includes('원')) {
+                const priceMatch = text.match(/[\d,]+/);
+                if (priceMatch) {
+                  return parseInt(priceMatch[0].replace(/,/g, ''));
                 }
               }
             }
           }
-          if (data.price) break;
-        }
+          return null;
+        };
 
-        // 브랜드/판매자 정보
-        const brandSelectors = [
-          '.channel_name',
-          '.seller_name',
-          '[class*="brand"]',
-        ];
-
-        for (const selector of brandSelectors) {
-          const element = document.querySelector(selector);
-          if (element && element.textContent.trim()) {
-            data.brand = element.textContent.trim();
-            break;
-          }
-        }
-
-        return data;
+        return {
+          name: extractElementText([
+            'h1',
+            '[class*="prod_buy_header"] h3',
+            '[class*="product"] h1',
+            '.product_title',
+          ]),
+          salePrice: extractPrice([
+            '.price_area .price',
+            '.total_price',
+            '[class*="price"]:not([class*="original"])',
+            '.sale_price',
+          ]),
+          brand: extractElementText([
+            '.channel_name',
+            '.seller_name',
+            '[class*="brand"]',
+          ]),
+        };
       });
 
-      // 추출된 데이터 병합
-      Object.assign(data, productInfo);
-
-      console.log(`상품 정보 추출 완료: ${data.title || 'Unknown'}`);
-      return data;
+      console.log(`HTML fallback 데이터 추출 완료: ${productInfo.name || 'Unknown'}`);
+      return productInfo;
     } catch (error) {
-      console.error('상품 데이터 추출 실패:', error.message);
-      return data;
+      console.error('HTML fallback 데이터 추출 실패:', error.message);
+      return { name: null, salePrice: null, brand: null };
     }
   }
 

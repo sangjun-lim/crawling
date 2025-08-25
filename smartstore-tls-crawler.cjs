@@ -11,6 +11,7 @@ class NaverSmartStoreTLSCrawler {
             headless: options.headless ?? true,
             timeout: options.timeout ?? 30000,
             saveData: options.saveData ?? true,
+            proxy: options.proxy ?? null,
             ...options
         };
         this.session = null;
@@ -22,7 +23,7 @@ class NaverSmartStoreTLSCrawler {
         
         await initTLS();
 
-        this.session = new Session({
+        const sessionOptions = {
             clientIdentifier: ClientIdentifier.chrome_120,
             timeout: this.options.timeout,
             insecureSkipVerify: false,
@@ -40,7 +41,15 @@ class NaverSmartStoreTLSCrawler {
                 'Sec-Fetch-User': '?1',
                 'Upgrade-Insecure-Requests': '1'
             }
-        });
+        };
+
+        // 프록시 설정 추가
+        if (this.options.proxy) {
+            sessionOptions.proxy = this.options.proxy;
+            console.log(`🔗 프록시 설정: ${this.options.proxy}`);
+        }
+
+        this.session = new Session(sessionOptions);
 
         console.log('✅ TLS 클라이언트 초기화 완료');
     }
@@ -80,6 +89,7 @@ class NaverSmartStoreTLSCrawler {
 
             if (storeResponse.status === 429) {
                 console.log('⏳ Rate limit 감지, 대기 후 재시도...');
+                return;
                 await this.sleep(5000);
                 return this.crawlProduct(storeId, productId);
             }
@@ -107,6 +117,7 @@ class NaverSmartStoreTLSCrawler {
 
             if (productResponse.status === 429) {
                 console.log('⏳ Rate limit 감지, 더 긴 대기 후 재시도...');
+                return;
                 await this.sleep(10000);
                 return this.crawlProduct(storeId, productId);
             }
@@ -382,7 +393,10 @@ class NaverSmartStoreTLSCrawler {
 async function main() {
     const crawler = new NaverSmartStoreTLSCrawler({
         timeout: 30000,
-        saveData: true
+        saveData: true,
+        // 프록시 설정 예시
+        proxy: 'http://211.45.182.138:54812'
+        // proxy: 'socks5://127.0.0.1:1080'
     });
 
     try {
