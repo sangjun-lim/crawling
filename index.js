@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import NaverStoreScraper from './src/core/NaverStoreScraper.js';
 import NaverSmartStoreScraper from './src/core/NaverSmartStoreScraper.js';
+import NaverShoppingScraper from './src/core/NaverShoppingScraper.js';
+import NaverShoppingHttpScraper from './src/core/NaverShoppingHttpScraper.js';
 
 async function main() {
   const startTime = Date.now();
@@ -55,9 +57,26 @@ async function main() {
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
         await scraper.saveToCsv(results, `naver_stores_${keywordOrUrl}_${timestamp}.csv`);
       }
+    } else if (mode === 'navershopping') {
+      console.log(`=== 네이버 쇼핑 홈페이지 스크래핑 ===`);
+      if (scraperOptions.proxy) {
+        console.log(`🔗 프록시: ${scraperOptions.proxy}`);
+      }
+      console.log();
+      
+      // const shoppingScraper = new NaverShoppingScraper(scraperOptions);
+      // const result = await shoppingScraper.scrapeHomepage();
+      const shoppingScraper = new NaverShoppingHttpScraper(scraperOptions);
+      const result = await shoppingScraper.scrapeHomepage();
+      
+      console.log(`✅ 스크래핑 완료:`);
+      console.log(`  - HTML 길이: ${result.html.length.toLocaleString()}자`);
+      console.log(`  - 저장 경로: ${result.savedPath}`);
+      console.log(`  - URL: ${result.url}`);
+      
     } else {
-      console.log('❌ 지원되지 않는 모드입니다. "map" 또는 "smartstore"를 사용하세요.');
-      console.log('📖 사용법: node index.js [map|smartstore] [keyword|url] [maxResults]');
+      console.log('❌ 지원되지 않는 모드입니다. "map", "smartstore", "navershopping"을 사용하세요.');
+      console.log('📖 사용법: node index.js [map|smartstore|navershopping] [keyword|url] [maxResults]');
     }
     
   } catch (error) {
