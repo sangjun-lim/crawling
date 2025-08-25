@@ -1,4 +1,6 @@
 import { chromium } from 'playwright';
+import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 
 class NaverSmartStoreScraper {
   constructor(options = {}) {
@@ -108,6 +110,149 @@ class NaverSmartStoreScraper {
     });
   }
 
+  /**
+   * 스토어 검색을 통해 특정 상품에 접근
+   */
+  async crawlProductBySearch(storeId, productId) {
+    if (!this.page) {
+      await this.init();
+    }
+
+    console.log(`🔍 검색을 통한 상품 크롤링 시작: ${storeId} / 검색어: ${productId}`);
+
+    try {
+      // 1단계: 스토어 메인페이지 접속
+      console.log('1️⃣ 스토어 메인페이지 접속 중...');
+      const storeUrl = `https://smartstore.naver.com/${storeId}`;
+
+      await this.page.goto(storeUrl, {
+        waitUntil: 'networkidle',
+        timeout: this.options.timeout,
+      });
+
+      // 1단계: 스토어 검색 페이지 접속
+      console.log('2️⃣ 스토어 검색 페이지 접속 중...');
+      const searchUrl = `https://smartstore.naver.com/${storeId}/search?q=${encodeURIComponent(productId)}`;
+      
+      await this.page.goto(searchUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: this.options.timeout,
+      });
+
+      let productClicked = false;
+      
+      await this.page.waitForSelector( `a[href*="/products/${productId}"]`, { timeout: 10000 });
+
+      // 2단계: 첫 번째 검색 결과 클릭
+      console.log('2️⃣ 검색 결과에서 첫 번째 상품 클릭...');
+      
+      const productSelectors = [
+        `a[href*="/products/${productId}"]`,
+      ];
+
+      for (const selector of productSelectors) {
+        try {
+          const elements = await this.page.$$(selector);
+          if (elements.length > 0) {
+            console.log(`✅ 상품 링크 발견: ${selector}`);
+            await elements[0].click();
+            productClicked = true;
+            break;
+          }
+        } catch (e) {
+          console.log(`🔍 선택자 시도: ${selector} - 실패`);
+        }
+      }
+
+      if (!productClicked) {
+        throw new Error('검색 결과에서 상품을 찾을 수 없습니다');
+      }
+
+      // 3단계: 상품 페이지 로딩 대기
+      console.log('3️⃣ 상품 페이지 로딩 대기 중...');
+      await this.page.waitForLoadState('networkidle');
+      await this.page.waitForTimeout(1000); // API 응답 대기
+
+      const finalUrl = this.page.url();
+      console.log(`🔗 최종 URL: ${finalUrl}`);
+
+      // 4단계: API 데이터 추출
+      console.log('4️⃣ API 데이터 추출 중...');
+      const apiData = await this.processApiResponse(productId);
+
+      let finalData = {
+        ...apiData,
+        crawledAt: new Date().toISOString(),
+        url: finalUrl,
+        searchQuery: productId,
+        method: 'search_api',
+      };
+
+      // API 데이터가 불충분한 경우 HTML fallback 사용
+      if (!apiData.name && !apiData.salePrice) {
+        console.log('5️⃣ API 데이터 부족, HTML fallback 시도...');
+        const htmlData = await this.extractFallbackData();
+        finalData = {
+          ...htmlData,
+          ...apiData,
+          crawledAt: new Date().toISOString(),
+          url: finalUrl,
+          searchQuery: productId,
+          method: 'search_html_fallback',
+        };
+      }
+
+      return finalData;
+    } catch (error) {
+      console.error(`❌ 검색 크롤링 실패: ${error.message}`);
+
+      // 에러 시 스크린샷 저장
+      if (this.page) {
+        await this.page.screenshot({
+          path: `error-search-${productId}-${Date.now()}.png`,
+          fullPage: true,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+/**
+ * 검색 기반 상품 스크래핑
+ */
+  async scrapeProductsBySearch(productUrl) {
+    try {
+      const splitUrl = productUrl.split('/');
+      const storeId = splitUrl[3];
+      const productId = splitUrl[5];
+
+      console.log(`네이버 스마트스토어 검색 기반 상품 수집 시작: ${storeId} / 검색어: ${productId}`);
+
+      // Playwright 초기화
+      const initialized = await this.init();
+      if (!initialized) {
+        throw new Error('Playwright 초기화 실패');
+      }
+
+      // 검색을 통한 상품 크롤링 실행
+      const productData = await this.crawlProductBySearch(storeId, productId);
+
+      // 결과 저장
+      if (productData && this.options.saveData) {
+        await this.saveData(productData, `search-${productId}`);
+      }
+
+      console.log(`검색 수집 완료: ${productData ? '성공' : '실패'}`);
+      return productData ? [productData] : [];
+    } catch (error) {
+      console.error('검색 스크래핑 실패:', error.message);
+      return [];
+    } finally {
+      await this.close();
+    }
+  }
+  
   /**
    * 스토어 메인페이지를 통해 특정 상품에 접근
    */
@@ -393,15 +538,13 @@ class NaverSmartStoreScraper {
     const filename = `result/smartstore-${productId}-${timestamp}.json`;
 
     try {
-      const fs = await import('fs');
-
       // result 디렉토리가 없으면 생성
       const resultDir = 'result';
       if (!fs.existsSync(resultDir)) {
-        fs.mkdirSync(resultDir, { recursive: true });
+        await fsPromises.mkdir(resultDir, { recursive: true });
       }
 
-      fs.writeFileSync(filename, JSON.stringify(data, null, 2), 'utf8');
+      await fsPromises.writeFile(filename, JSON.stringify(data, null, 2), 'utf8');
       console.log(`💾 데이터 저장: ${filename}`);
 
       // 요약 정보 출력
@@ -414,11 +557,6 @@ class NaverSmartStoreScraper {
             : data.price
             ? data.price.toLocaleString()
             : 'N/A'
-        }원`
-      );
-      console.log(
-        `정가: ${
-          data.originalPrice ? data.originalPrice.toLocaleString() : 'N/A'
         }원`
       );
       console.log(

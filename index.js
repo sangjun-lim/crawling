@@ -3,6 +3,9 @@ import NaverStoreScraper from './src/core/NaverStoreScraper.js';
 import NaverSmartStoreScraper from './src/core/NaverSmartStoreScraper.js';
 
 async function main() {
+  const startTime = Date.now();
+  console.log(`🚀 프로그램 시작: ${new Date().toLocaleString()}`);
+  
   // .env 파일에서 설정값 읽어오기
   const loggingOptions = {
     enableLogging: process.env.ENABLE_LOGGING !== 'false', // 기본 활성화
@@ -24,17 +27,17 @@ async function main() {
     if (mode === 'smartstore') {
       console.log(`=== 네이버 스마트스토어 상품 정보 추출 ===`);
       console.log(`상품 URL: ${keyword}`);
-      console.log(`최대 결과: ${maxResults}개\n`);
       
       const smartStoreScraper = new NaverSmartStoreScraper(loggingOptions);
-      await smartStoreScraper.scrapeProducts(keyword, maxResults);
+      // await smartStoreScraper.scrapeProducts(keyword, maxResults);
+      await smartStoreScraper.scrapeProductsBySearch(keyword);
       
     } else {
       console.log(`=== 네이버 지도 매장 순위 추출 ===`);
       console.log(`검색 키워드: ${keyword}\n`);
       
       const scraper = new NaverStoreScraper(loggingOptions);
-      const results = await scraper.searchStores(keyword);
+      const results = await scraper.searchStores(keyword, maxResults);
       
       if (results.stores.length > 0) {
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
@@ -44,6 +47,11 @@ async function main() {
     
   } catch (error) {
     console.error('프로그램 실행 중 오류 발생:', error.message);
+  } finally {
+    const endTime = Date.now();
+    const executionTime = endTime - startTime;
+    console.log(`\n⏱️  총 실행시간: ${(executionTime / 1000).toFixed(2)}초`);
+    console.log(`🏁 프로그램 종료: ${new Date().toLocaleString()}`);
   }
 }
 
