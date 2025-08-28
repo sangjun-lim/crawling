@@ -6,7 +6,7 @@ import { promises as fsPromises } from 'fs';
 class NaverShoppingHttpScraper extends BaseScraper {
   constructor(options = {}) {
     super(options);
-    
+
     this.options = {
       timeout: options.timeout ?? 30000,
       saveData: options.saveData ?? true,
@@ -16,19 +16,20 @@ class NaverShoppingHttpScraper extends BaseScraper {
     // 프록시 설정을 CurlHttpClient 형식으로 변환
     const proxyConfig = this.getHttpProxyConfig();
     let curlOptions = { ...options };
-    
+
     if (proxyConfig) {
-      curlOptions.proxy = proxyConfig.protocol === 'https' 
-        ? `https://${proxyConfig.host}:${proxyConfig.port}`
-        : `http://${proxyConfig.host}:${proxyConfig.port}`;
-      
+      curlOptions.proxy =
+        proxyConfig.protocol === 'https'
+          ? `https://${proxyConfig.host}:${proxyConfig.port}`
+          : `http://${proxyConfig.host}:${proxyConfig.port}`;
+
       if (proxyConfig.auth) {
         curlOptions.proxyAuth = proxyConfig.auth;
       }
-      
+
       this.logInfo(`CurlHttpClient 프록시 설정: ${curlOptions.proxy}`);
     }
-    
+
     this.httpClient = new CurlHttpClient(curlOptions);
   }
 
@@ -49,97 +50,48 @@ class NaverShoppingHttpScraper extends BaseScraper {
    */
   async getHomepageHtml() {
     try {
-
       let url, response, payload;
-      
-      let ts = new Date().getTime();
+      this.logInfo('네이버 쇼핑 검색 페이지 HTTP 요청 중...');
+      url = 'https://search.shopping.naver.com/catalog/51449387077?query=%EC%9D%98%EC%9E%90&NaPm=ct%3Dmes2nvl4%7Cci%3D1927a15e74b13c54bbe312b6ece18d85c0e6aacb%7Ctr%3Dslsl%7Csn%3D95694%7Chk%3D1ff359a90554d6aeda95dc6d17bb3c737cc1a384';
 
-      url = 'https://nlog.naver.com/n';
-      payload = {
-        "corp": "naver",
-        "svc": "main",
-        "location": "korea_real/korea",
-        "svc_tags": {},
-        "send_ts": ts + 1,
-        "usr": {},
-        "env": {},
-        "evts": [
-          {
-            "page_url": "https://www.naver.com/",
-            "page_ref": "pageview",
-            "evt_ts": ts,
-          }
-        ]
-      }
-
-      response = await this.httpClient.post(url, payload, {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Origin': 'https://www.naver.com',
-        'Referer': 'https://www.naver.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-        'sec-ch-ua': '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"'
-      });
-
-      // 응답 쿠키 출력
-      this.logInfo('=== nlog.naver.com POST 응답 정보 ===');
-      console.log('Status:', response.status);
-      console.log('Headers:', response.headers);
-      
-      // Set-Cookie 헤더에서 쿠키 정보 출력
-      if (response.headers['set-cookie']) {
-        this.logInfo('🍪 응답 쿠키:');
-        response.headers['set-cookie'].forEach((cookie, index) => {
-          console.log(`  ${index + 1}: ${cookie}`);
-        });
-      } else {
-        this.logInfo('쿠키 없음');
-      }
-      
-      // CurlHttpClient의 쿠키 저장소에서 현재 쿠키들 출력
-      const domain = new URL(url).hostname;
-      const cookieString = this.httpClient.getCookiesForDomain(domain);
-      this.logInfo(`현재 쿠키 저장소 (${domain}): ${cookieString || 'None'}`);
-      
-      console.log('Response Data:', response.data);
-
-      this.logInfo('네이버 쇼핑 홈페이지 HTTP 요청 중...');
-      url = 'https://shopping.naver.com/ns/home';
-
-      response = await this.httpClient.get(url, {}, {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Referer': 'https://nlog.naver.com/',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'same-site',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-        'sec-ch-ua': '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"'
-      });
+      response = await this.httpClient.get(
+        url,
+        {},
+        {
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Sec-Fetch-Site': 'same-site',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-User': '?1',
+          'Sec-Fetch-Dest': 'document',
+          'sec-ch-ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-arch': 'arm',
+          'sec-ch-ua-platform': 'macOS',
+          'sec-ch-ua-platform-version': '15.6.0',
+          'sec-ch-ua-model': '""',
+          'sec-ch-ua-bitness': '64',
+          'sec-ch-ua-wow64': '?0',
+          'sec-ch-ua-full-version-list': '"Not;A=Brand";v="99.0.0.0", "Google Chrome";v="139.0.7258.139", "Chromium";v="139.0.7258.139"',
+          'sec-ch-ua-form-factors': 'Desktop',
+          'Referer': 'https://search.shopping.naver.com/search/all?query=%EC%9D%98%EC%9E%90',
+          'Accept-Encoding': 'gzip, deflate, br, zstd',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Cookie': 'NNB=PBS5ATIEDHRGI; ASID=738a27760000018f8c1c97cf00000065; NFS=2; BNB_FINANCE_HOME_TOOLTIP_MYASSET=true; ba.uuid=112a009c-0356-4e8f-919d-ce402de57095; NV_WETR_LAST_ACCESS_RGN_M="MDkxNDAxMDQ="; NV_WETR_LOCATION_RGN_M="MDkxNDAxMDQ="; _fbp=fb.1.1752146940101.380195513315487304; _ga_EFBDNNF91G=GS2.1.s1752146940$o1$g0$t1752146940$j60$l0$h0; _ga=GA1.1.18899327.1752146941; bnb_tooltip_shown_finance_v1=true; SHP_BUCKET_ID=2; nstore_session=79n5DtkePcflctve1eP+hPNP; RELATED_PRODUCT=ON; page_uid=j60wsdqosTCssFDZbrossssssXd-210586; NAC=J03zBwgIxUva; SRT30=1756183024; NACT=1; nid_inf=1747328577; NID_AUT=6+/bSmXiIe6uSBdaaj0c/EwgbAYIzTqieE2dGzKcdP/mzMPzcl2q5VIuUS+tCk+F; NID_SES=AAABqUHNWJLkgFf/9SuBvTJPeovIb5aiWIvZY3Ht5boyUj527aB9rWUZG5mvY3ygJM6/yC3IoYq6olj0d34qduqjc1SCsTuPxtMh7mozKCex9UpZMCaX570jH0P1qY1a4tRQO6CnPIaL2wXTgkAZKmdgh36V3GqQeplFjDJ+m7+VRjtMvcSzpsR7vNUtaVstmFX+D3UXeUzzabDuvMIeBj7bnx8XSjlqRPZg1lNa62R/hUFah/+xpPL/KamPNvUJDnUNZWbvgHu4heXJ8OABDbmX+OxXpLRGQb7rp9s7CdDZ6ZD12Mx87D9JGjJ8RP3QUa4eDVGFzt1de18FXRJM6yG6UxCW0FNZ3OIFfhO9HmLiddfIWtY20G6LQUqIdYRYch/eaM65rNSEbC5Vz8tezrQ8FtVCzNpca4zd4BZRclfhTQ/ccDatjhtkriaVQJZ0prSrEznfDIgzBZClMK+9B9+Ds3X9rvC0MNv6gKJghINi+h25AUeHBTKqabqJ65Jvu/+GB+SMTP0siX9Ph+TPo7WZLsLxdj152/AIct+tAN7arlLMhRrb3iDK/oQmlORfgReFgA==; nstore_pagesession=j60IWsqQRjQ7lwsLV14-133286; OEP_CONFIG=[{%22serId%22:%22shopping%22%2C%22type%22:%22oep%22%2C%22expId%22:%22NSP-SEARCH-ABT%22%2C%22varId%22:%227%22%2C%22value%22:{%22bucket%22:%221%22%2C%22is_control%22:true}%2C%22userType%22:%22idno%22%2C%22provId%22:%22%22%2C%22sesnId%22:%22%22}%2C{%22serId%22:%22shopping%22%2C%22type%22:%22oep%22%2C%22expId%22:%22QAC-RANK-VDT%22%2C%22varId%22:%222%22%2C%22value%22:{%22bt%22:%222%22%2C%22is_control%22:true}%2C%22userType%22:%22idno%22%2C%22provId%22:%22%22%2C%22sesnId%22:%22%22}]; SRT5=1756183844; BUC=iei3XkDheJ2E8CV8AHutb9AjXl6DOxXj8T26D9VYgO4=; sus_val=kHEUq4wqPQPFSUIlXwLrmxK4'
+        }
+      );
 
       if (response.status !== 200) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const htmlContent = response.data;
-      this.logSuccess(`HTML 응답 수신 완료 (길이: ${htmlContent.length.toLocaleString()}자)`);
-      
+      this.logSuccess(
+        `HTML 응답 수신 완료 (길이: ${htmlContent.length.toLocaleString()}자)`
+      );
+
       return htmlContent;
     } catch (error) {
       this.logError(`네이버 쇼핑 HTTP 요청 실패: ${error.message}`);
@@ -164,7 +116,7 @@ class NaverShoppingHttpScraper extends BaseScraper {
 
       await fsPromises.writeFile(filepath, htmlContent, 'utf8');
       this.logSuccess(`HTML 파일 저장 완료: ${filepath}`);
-      
+
       return filepath;
     } catch (error) {
       this.logError(`HTML 파일 저장 실패: ${error.message}`);
@@ -192,7 +144,7 @@ class NaverShoppingHttpScraper extends BaseScraper {
       }
 
       this.logSuccess('네이버 쇼핑 HTTP 스크래핑 완료');
-      
+
       return {
         html: htmlContent,
         savedPath: savedPath,

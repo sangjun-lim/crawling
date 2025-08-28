@@ -1,0 +1,33 @@
+def ask_about_captcha_base64(base64_image_str, rcpt_text):
+    prompt = f"""
+        다음 이미지는 네이버 쇼핑 보안문제입니다.
+        이미지 안에는 질문 문장과 영수증 정보가 같이 담겨있습니다.
+        이미지를 분석해서 질문에 맞는 정답을 숫자 또는 단어 하나만 출력해주세요.
+        영수증은 무조건 1장입니다. 여러장으로 보인다면 그건 영수증이 찢어진겁니다.
+        찢어진 영수증은 합쳐서 분석하면 됩니다.
+        전화번호는 xxx-xxxx, 또는 xxxx-xxxx 숫자 형태입니다.
+        설명은 제외하고 정답만 주세요.
+        예) 총 금액은 얼마입니까? → 36400
+        예) 구매한 물건 수는? → 7
+        예) 전화번호 끝자리는? → 3
+        예) 2kg → 2
+        예) 총 몇개는 수량 세로 열을 모두 더해서 계산하면 돼
+        답변중에 특수문자는 없습니다.
+        예) 정답이 0.5 이런건 없습니다.
+        답변중에 영어는 없습니다.
+        질문: {rcpt_text}
+    """
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "너는 OCR과 이미지를 함께 참고하여 문제의 정답을 추론하는 AI야. 반드시 정답만 출력해야 해."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_str}"}}
+                ],
+            }
+        ],
+    )
+    return response.choices[0].message.content.strip()

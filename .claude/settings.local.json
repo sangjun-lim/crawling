@@ -23,7 +23,9 @@
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_close",
       "Bash(grep:*)",
-      "mcp__context7__resolve-library-id"
+      "mcp__context7__resolve-library-id",
+      "mcp__playwright__browser_network_requests",
+      "mcp__sequential-thinking__sequentialthinking"
     ],
     "deny": [],
     "ask": []
