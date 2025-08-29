@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import NaverStoreScraper from './src/core/NaverStoreScraper.js';
 import NaverSmartStoreScraper from './src/core/NaverSmartStoreScraper.js';
-import NaverShoppingScraper from './src/core/NaverShoppingScraper.js';
 
 async function main() {
   const startTime = Date.now();
@@ -63,7 +62,7 @@ async function main() {
       }
     } else if (mode === 'navershopping') {
       console.log(`=== 네이버 쇼핑 상품 클릭 스크래핑 ===`);
-      
+
       // URL에서 검색어와 상품 ID 추출
       const urlInput = keywordOrUrl;
       let searchKeyword = '';
@@ -73,23 +72,23 @@ async function main() {
         if (urlInput.includes('search.shopping.naver.com/catalog/')) {
           // URL 파싱
           const url = new URL(urlInput);
-          
+
           // 상품 ID 추출 (catalog/ 다음 숫자)
           const pathMatch = url.pathname.match(/\/catalog\/(\d+)/);
           if (pathMatch) {
             productId = pathMatch[1];
           }
-          
+
           // 검색어 추출 (query 파라미터)
           const queryParam = url.searchParams.get('query');
           if (queryParam) {
             searchKeyword = decodeURIComponent(queryParam);
           }
-          
+
           console.log(`📄 URL 파싱 결과:`);
           console.log(`  - 검색어: "${searchKeyword}"`);
           console.log(`  - 상품 ID: "${productId}"`);
-          
+
           if (!searchKeyword || !productId) {
             throw new Error('URL에서 검색어 또는 상품 ID를 추출할 수 없습니다');
           }
@@ -98,7 +97,9 @@ async function main() {
         }
       } catch (parseError) {
         console.error('❌ URL 파싱 실패:', parseError.message);
-        console.log('📖 올바른 형식: https://search.shopping.naver.com/catalog/51449387077?query=의자');
+        console.log(
+          '📖 올바른 형식: https://search.shopping.naver.com/catalog/51449387077?query=의자'
+        );
         return;
       }
 
@@ -108,20 +109,23 @@ async function main() {
 
       console.log();
 
-      const shoppingScraper = new NaverShoppingScraper({
+      const shoppingScraper = new NaverShoppingRealBrowserScraper({
         ...scraperOptions,
         headless: false,
         timeout: 30000,
         slowMo: 100,
-        saveData: true,  // HTML 저장 활성화
+        saveData: true, // HTML 저장 활성화
       });
 
       try {
         console.log('🚀 네이버 쇼핑 상품 클릭 시나리오 시작...');
-        
+
         // 추출된 검색어와 상품 ID로 시나리오 실행
-        await shoppingScraper.findAndClickProduct(searchKeyword, productId);
-        
+        await shoppingScraper.scrapeProductPriceComparison(
+          searchKeyword,
+          productId
+        );
+
         console.log(`✅ 시나리오 완료`);
       } catch (scraperError) {
         console.error('❌ 스크래핑 중 오류:', scraperError.message);
@@ -140,10 +144,14 @@ async function main() {
       console.log('📖 사용법:');
       console.log('  • 지도 검색: node index.js map "키워드" [결과수]');
       console.log('  • 스마트스토어: node index.js smartstore "상품URL"');
-      console.log('  • 쇼핑 상품 클릭: node index.js navershopping "카탈로그URL"');
+      console.log(
+        '  • 쇼핑 상품 클릭: node index.js navershopping "카탈로그URL"'
+      );
       console.log('');
       console.log('📄 네이버 쇼핑 예시:');
-      console.log('  node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?query=의자"');
+      console.log(
+        '  node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?query=의자"'
+      );
     }
   } catch (error) {
     console.error('프로그램 실행 중 오류 발생:', error.message);
@@ -158,6 +166,7 @@ async function main() {
 // ES 모듈에서 직접 실행 확인
 import { fileURLToPath } from 'url';
 import path from 'path';
+import NaverShoppingRealBrowserScraper from './src/core/NaverShoppingRealBrowserScraper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

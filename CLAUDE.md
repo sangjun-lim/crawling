@@ -15,7 +15,7 @@ A Node.js web scraping application that extracts business ranking data from Nave
 npm start
 
 # Run with specific mode, keyword/URL, and max results
-node index.js [map|smartstore] [keyword|url] [maxResults]
+node index.js [map|smartstore|navershopping] [keyword|url] [maxResults]
 
 # Example searches - Naver Map
 node index.js map "강남 맛집" 10
@@ -27,6 +27,7 @@ node index.js smartstore "https://smartstore.naver.com/wodnr7762/products/846484
 node index.js smartstore "https://smartstore.naver.com/store123/products/123456"
 
 # Example searches - Naver Shopping
+# "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-crawling --no-first-run --disable-default-apps --disable-extensions
 node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?cat_id=50003299&frm=NVSCVUI&query=%EC%9D%98%EC%9E%90"
 
 # Note: maxResults is only used in map mode
