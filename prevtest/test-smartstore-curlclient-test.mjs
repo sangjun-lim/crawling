@@ -1,4 +1,4 @@
-import CurlHttpClient from './src/core/CurlHttpClient.js';
+import CurlHttpClient from '../src/core/CurlHttpClient.js';
 import fs from 'fs';
 
 /**

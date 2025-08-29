@@ -62,43 +62,88 @@ async function main() {
         );
       }
     } else if (mode === 'navershopping') {
-      console.log(`=== 네이버 쇼핑 고급 스크래핑 ===`);
+      console.log(`=== 네이버 쇼핑 상품 클릭 스크래핑 ===`);
+      
+      // URL에서 검색어와 상품 ID 추출
+      const urlInput = keywordOrUrl;
+      let searchKeyword = '';
+      let productId = '';
+
+      try {
+        if (urlInput.includes('search.shopping.naver.com/catalog/')) {
+          // URL 파싱
+          const url = new URL(urlInput);
+          
+          // 상품 ID 추출 (catalog/ 다음 숫자)
+          const pathMatch = url.pathname.match(/\/catalog\/(\d+)/);
+          if (pathMatch) {
+            productId = pathMatch[1];
+          }
+          
+          // 검색어 추출 (query 파라미터)
+          const queryParam = url.searchParams.get('query');
+          if (queryParam) {
+            searchKeyword = decodeURIComponent(queryParam);
+          }
+          
+          console.log(`📄 URL 파싱 결과:`);
+          console.log(`  - 검색어: "${searchKeyword}"`);
+          console.log(`  - 상품 ID: "${productId}"`);
+          
+          if (!searchKeyword || !productId) {
+            throw new Error('URL에서 검색어 또는 상품 ID를 추출할 수 없습니다');
+          }
+        } else {
+          throw new Error('올바른 네이버 쇼핑 catalog URL을 입력해주세요');
+        }
+      } catch (parseError) {
+        console.error('❌ URL 파싱 실패:', parseError.message);
+        console.log('📖 올바른 형식: https://search.shopping.naver.com/catalog/51449387077?query=의자');
+        return;
+      }
+
       if (scraperOptions.proxy) {
         console.log(`🔗 프록시: ${scraperOptions.proxy}`);
       }
 
-      // 모바일 모드 체크
-      const mobile = process.argv.includes('--mobile');
-      if (mobile) {
-        console.log(`📱 모바일 모드 활성화`);
-        scraperOptions.mobile = true;
-      }
-
       console.log();
 
-      const shoppingScraper = new NaverShoppingScraper(scraperOptions);
-      const result = await shoppingScraper.scrapeProduct();
+      const shoppingScraper = new NaverShoppingScraper({
+        ...scraperOptions,
+        headless: false,
+        timeout: 30000,
+        slowMo: 100,
+        saveData: true,  // HTML 저장 활성화
+      });
 
-      console.log(`✅ 고급 스크래핑 완료:`);
-      console.log(`  - HTML 길이: ${result.html.length.toLocaleString()}자`);
-      console.log(`  - 저장 경로: ${result.savedPath}`);
-      console.log(`  - URL: ${result.url}`);
-      console.log(`  - 크롤링 통계:`);
-      console.log(`    * 총 크롤링 횟수: ${result.stats.crawlCount}`);
-      console.log(
-        `    * 다음 세션 리셋: ${result.stats.nextSessionReset}번 후`
-      );
-      console.log(`    * TLS 버전: ${result.stats.tlsSupport}`);
+      try {
+        console.log('🚀 네이버 쇼핑 상품 클릭 시나리오 시작...');
+        
+        // 추출된 검색어와 상품 ID로 시나리오 실행
+        await shoppingScraper.findAndClickProduct(searchKeyword, productId);
+        
+        console.log(`✅ 시나리오 완료`);
+      } catch (scraperError) {
+        console.error('❌ 스크래핑 중 오류:', scraperError.message);
+      } finally {
+        // CDP 연결 해제 (브라우저는 계속 실행)
+        try {
+          await shoppingScraper.close();
+        } catch (closeError) {
+          console.error('연결 해제 중 오류:', closeError.message);
+        }
+      }
     } else {
       console.log(
         '❌ 지원되지 않는 모드입니다. "map", "smartstore", "navershopping"을 사용하세요.'
       );
-      console.log(
-        '📖 사용법: node index.js [map|smartstore|navershopping] [keyword|url] [maxResults]'
-      );
-      console.log(
-        '📱 모바일 모드: node index.js navershopping "검색어" --mobile'
-      );
+      console.log('📖 사용법:');
+      console.log('  • 지도 검색: node index.js map "키워드" [결과수]');
+      console.log('  • 스마트스토어: node index.js smartstore "상품URL"');
+      console.log('  • 쇼핑 상품 클릭: node index.js navershopping "카탈로그URL"');
+      console.log('');
+      console.log('📄 네이버 쇼핑 예시:');
+      console.log('  node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?query=의자"');
     }
   } catch (error) {
     console.error('프로그램 실행 중 오류 발생:', error.message);

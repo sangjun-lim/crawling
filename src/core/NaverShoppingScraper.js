@@ -27,78 +27,69 @@ class NaverShoppingScraper extends BaseScraper {
     try {
       // 부모 클래스 초기화 (프록시 테스트 포함)
       await super.init();
-      this.logInfo('Playwright-Extra + FingerprintGenerator 초기화 중...');
+      this.logInfo('CDP를 통해 기존 브라우저에 연결 중...');
 
-      // Stealth 플러그인 임시 비활성화 (헤더 테스트용)
+      // Stealth 플러그인 활성화
       chromium.use(stealth());
       const fingerprintGenerator = new FingerprintGenerator({
-        devices: ['mobile'],
-        operatingSystems: ['android'],
+        devices: ['desktop'],
+        operatingSystems: ['macos'],
         browsers: [{ name: 'chrome', minVersion: 120, maxVersion: 130 }],
-        locales: ['ko-KR', 'en-US'],
+        locales: ['ko-KR', 'ko', 'en-US', 'en'],
         mockWebRTC: true,
       });
       const fingerprint = fingerprintGenerator.getFingerprint();
 
       // 디버깅: fingerprint 구조 확인
-      console.log('Fingerprint 구조:', JSON.stringify(fingerprint, null, 2));
+      // console.log('Fingerprint 구조:', JSON.stringify(fingerprint, null, 2));
 
-      const launchOptions = {
-        headless: false,
-        slowMo: this.options.slowMo,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-features=VizDisplayCompositor',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--disable-field-trial-config',
-          '--disable-hang-monitor',
-          '--disable-ipc-flooding-protection',
-          '--no-first-run',
-          '--no-default-browser-check',
-          '--no-zygote',
-          '--disable-extensions-except',
-          '--disable-extensions',
-          '--disable-default-apps',
-          '--window-size=375,812',
-          // 실제 브라우저와 더 유사하게
-          '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
-        ],
-        ignoreDefaultArgs: [
-          '--enable-automation',
-          '--enable-blink-features=AutomationControlled',
-        ],
-      };
+      // CDP를 통해 기존 브라우저에 연결 (IPv4 명시)
+      this.browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
 
-      // 프록시 설정 적용
-      const playwrightProxyConfig = this.getPlaywrightProxyConfig();
-      if (playwrightProxyConfig) {
-        launchOptions.proxy = playwrightProxyConfig;
-        this.logInfo(`프록시 설정 적용: ${playwrightProxyConfig.server}`);
+      // 기존 브라우저의 컨텍스트 가져오기
+      const contexts = this.browser.contexts();
+      if (contexts.length > 0) {
+        this.context = contexts[0];
+        this.logInfo('✅ 기존 컨텍스트 사용');
+      } else {
+        // 컨텍스트가 없으면 새로 생성
+        this.context = await this.browser.newContext({
+          userAgent:
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          viewport: {
+            width: 1440,
+            height: 900,
+          },
+          locale: 'ko-KR',
+          timezoneId: 'Asia/Seoul',
+          extraHTTPHeaders: {
+            'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.1',
+            Accept:
+              'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'max-age=0',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+          },
+          deviceScaleFactor: 1.0,
+          hasTouch: false,
+          isMobile: false,
+        });
+        this.logInfo('✅ 새 컨텍스트 생성');
       }
 
-      this.browser = await chromium.launch(launchOptions);
-
-      this.context = await this.browser.newContext({
-        userAgent: fingerprint.headers['user-agent'],
-        viewport: {
-          width: fingerprint.fingerprint.screen.width,
-          height: fingerprint.fingerprint.screen.height,
-        },
-        locale: 'ko-KR',
-        timezoneId: 'Asia/Seoul',
-        extraHTTPHeaders: fingerprint.headers,
-        deviceScaleFactor: fingerprint.fingerprint.screen.devicePixelRatio,
-        hasTouch: true,
-        isMobile: true,
-      });
-
-      this.page = await this.context.newPage();
+      // 기존 페이지가 있으면 사용, 없으면 새로 생성
+      const pages = this.context.pages();
+      if (pages.length > 0) {
+        this.page = pages[0];
+        this.logInfo('✅ 기존 페이지 사용');
+      } else {
+        this.page = await this.context.newPage();
+        this.logInfo('✅ 새 페이지 생성');
+      }
 
       // fingerprint JS 스크립트 추가 (최신 API 사용)
       try {
@@ -174,271 +165,14 @@ class NaverShoppingScraper extends BaseScraper {
         }
       });
 
-      // 강력한 탐지 방지 스크립트
-      // await this.context.addInitScript(() => {
-      //   // webdriver 속성 완전 제거
-      //   Object.defineProperty(navigator, 'webdriver', {
-      //     get: () => undefined,
-      //   });
-
-      //   // Chrome DevTools Protocol 관련 속성 제거
-      //   delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-      //   delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-      //   delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
-      //   delete window.cdc_adoQpoasnfa76pfcZLmcfl_JSON;
-      //   delete window.cdc_adoQpoasnfa76pfcZLmcfl_Object;
-      //   delete window.cdc_adoQpoasnfa76pfcZLmcfl_Proxy;
-
-      //   // Playwright 및 자동화 도구 흔적 제거
-      //   delete window.__playwright;
-      //   delete window.__webdriver_script_fn;
-      //   delete window.__webdriver_evaluate;
-      //   delete window.__selenium_unwrapped;
-      //   delete window.__webdriver_unwrapped;
-      //   delete window.__driver_evaluate;
-      //   delete window.__webdriver_script_func;
-      //   delete window.__fxdriver_evaluate;
-      //   delete window.__fxdriver_unwrapped;
-      //   delete window.__nightmare;
-      //   delete window.phantom;
-      //   delete window.callPhantom;
-
-      //   // 추가 자동화 도구 흔적 제거
-      //   delete window.domAutomation;
-      //   delete window.domAutomationController;
-      //   delete window.htmlWebdriverApi;
-      //   delete window.selenium;
-      //   delete window._Selenium_IDE_Recorder;
-      //   delete window._selenium;
-      //   delete window.calledSelenium;
-      //   delete window._WEBDRIVER_ELEM_CACHE;
-      //   delete window.ChromeDriverw;
-      //   delete window.driver;
-      //   delete window.webdriver;
-
-      //   // performance.timing 자연스럽게 위장
-      //   if (window.performance && window.performance.timing) {
-      //     const timing = window.performance.timing;
-      //     const fakeStart = Date.now() - Math.random() * 5000;
-      //     Object.defineProperty(timing, 'navigationStart', {
-      //       get: () => fakeStart,
-      //     });
-      //     Object.defineProperty(timing, 'loadEventEnd', {
-      //       get: () => fakeStart + Math.random() * 3000 + 1000,
-      //     });
-      //   }
-
-      //   // Chrome runtime 및 extension API 완전 위장
-      //   if (!window.chrome) {
-      //     window.chrome = {};
-      //   }
-
-      //   Object.defineProperty(window.chrome, 'runtime', {
-      //     value: {
-      //       onConnect: {
-      //         addListener: function () {},
-      //         removeListener: function () {},
-      //         hasListener: function () {
-      //           return false;
-      //         },
-      //       },
-      //       onMessage: {
-      //         addListener: function () {},
-      //         removeListener: function () {},
-      //         hasListener: function () {
-      //           return false;
-      //         },
-      //       },
-      //       connect: function () {
-      //         return { onMessage: { addListener: function () {} } };
-      //       },
-      //       sendMessage: function () {},
-      //       getManifest: function () {
-      //         return {};
-      //       },
-      //       getURL: function (path) {
-      //         return 'chrome-extension://invalid/' + path;
-      //       },
-      //     },
-      //     writable: false,
-      //     configurable: false,
-      //   });
-
-      //   // loadTimes API 위장
-      //   if (!window.chrome.loadTimes) {
-      //     Object.defineProperty(window.chrome, 'loadTimes', {
-      //       value: function () {
-      //         return {
-      //           requestTime: performance.timing.navigationStart / 1000,
-      //           startLoadTime: performance.timing.navigationStart / 1000,
-      //           commitLoadTime: performance.timing.responseStart / 1000,
-      //           finishDocumentLoadTime:
-      //             performance.timing.domContentLoadedEventEnd / 1000,
-      //           finishLoadTime: performance.timing.loadEventEnd / 1000,
-      //           firstPaintTime: performance.timing.loadEventEnd / 1000,
-      //           firstPaintAfterLoadTime: 0,
-      //           navigationType: 'Other',
-      //           wasFetchedViaSpdy: false,
-      //           wasNpnNegotiated: false,
-      //           npnNegotiatedProtocol: 'unknown',
-      //           wasAlternateProtocolAvailable: false,
-      //           connectionInfo: 'http/1.1',
-      //         };
-      //       },
-      //       writable: false,
-      //       configurable: false,
-      //     });
-      //   }
-
-      //   // 권한 관련 API 완전 위장
-      //   const originalQuery = window.navigator.permissions?.query;
-      //   if (originalQuery) {
-      //     window.navigator.permissions.query = function (parameters) {
-      //       const permissionStatus = {
-      //         state:
-      //           parameters.name === 'notifications'
-      //             ? Notification.permission || 'default'
-      //             : 'granted',
-      //         addEventListener: function () {},
-      //         removeEventListener: function () {},
-      //       };
-      //       return Promise.resolve(permissionStatus);
-      //     };
-      //   }
-
-      //   // WebGL 완전 위장 (더 정교하게)
-      //   const contexts = [
-      //     'webgl',
-      //     'webgl2',
-      //     'experimental-webgl',
-      //     'experimental-webgl2',
-      //   ];
-      //   const getContext = HTMLCanvasElement.prototype.getContext;
-
-      //   HTMLCanvasElement.prototype.getContext = function (
-      //     contextType,
-      //     contextAttributes
-      //   ) {
-      //     if (contexts.includes(contextType)) {
-      //       const context = getContext.call(
-      //         this,
-      //         contextType,
-      //         contextAttributes
-      //       );
-      //       if (context) {
-      //         const getParameter = context.getParameter;
-      //         context.getParameter = function (parameter) {
-      //           // GPU 정보 위장
-      //           if (parameter === 37445) return 'Intel Inc.'; // VENDOR
-      //           if (parameter === 37446) return 'Intel Iris Pro OpenGL Engine'; // RENDERER
-      //           if (parameter === 7936)
-      //             return 'WebGL 1.0 (OpenGL ES 2.0 Chromium)'; // VERSION
-      //           if (parameter === 35724)
-      //             return 'WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)'; // SHADING_LANGUAGE_VERSION
-
-      //           // 기타 파라미터들
-      //           if (parameter === 34921) return new Float32Array([1, 1]); // ALIASED_LINE_WIDTH_RANGE
-      //           if (parameter === 34930) return new Float32Array([1, 1024]); // ALIASED_POINT_SIZE_RANGE
-      //           if (parameter === 3379) return 16384; // MAX_TEXTURE_SIZE
-      //           if (parameter === 34076) return 16384; // MAX_CUBE_MAP_TEXTURE_SIZE
-
-      //           return getParameter.call(this, parameter);
-      //         };
-      //       }
-      //       return context;
-      //     }
-      //     return getContext.call(this, contextType, contextAttributes);
-      //   };
-
-      //   // Canvas fingerprinting 방지
-      //   const getImageData = CanvasRenderingContext2D.prototype.getImageData;
-      //   CanvasRenderingContext2D.prototype.getImageData = function (
-      //     sx,
-      //     sy,
-      //     sw,
-      //     sh
-      //   ) {
-      //     const imageData = getImageData.call(this, sx, sy, sw, sh);
-      //     // 매우 미세한 노이즈 추가
-      //     for (let i = 0; i < imageData.data.length; i += 4) {
-      //       if (Math.random() < 0.001) {
-      //         imageData.data[i] = Math.max(
-      //           0,
-      //           Math.min(255, imageData.data[i] + Math.random() - 0.5)
-      //         );
-      //       }
-      //     }
-      //     return imageData;
-      //   };
-
-      //   // 플러그인 정보 더 현실적으로 위장
-      //   const plugins = [
-      //     {
-      //       name: 'Chrome PDF Plugin',
-      //       filename: 'internal-pdf-viewer',
-      //       description: 'Portable Document Format',
-      //       length: 1,
-      //     },
-      //     {
-      //       name: 'Chrome PDF Viewer',
-      //       filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
-      //       description: '',
-      //       length: 1,
-      //     },
-      //     {
-      //       name: 'Native Client',
-      //       filename: 'internal-nacl-plugin',
-      //       description: '',
-      //       length: 2,
-      //     },
-      //   ];
-
-      //   Object.defineProperty(navigator, 'plugins', {
-      //     get: () => plugins,
-      //   });
-
-      //   // 언어 설정 더 자연스럽게
-      //   Object.defineProperty(navigator, 'languages', {
-      //     get: () => ['ko-KR', 'ko', 'en-US', 'en'],
-      //   });
-
-      //   // 하드웨어 정보 위장
-      //   Object.defineProperty(navigator, 'hardwareConcurrency', {
-      //     get: () =>
-      //       Math.max(2, Math.min(navigator.hardwareConcurrency || 4, 16)),
-      //   });
-
-      //   // 메모리 정보 위장 (있는 경우에만)
-      //   if (navigator.deviceMemory) {
-      //     Object.defineProperty(navigator, 'deviceMemory', {
-      //       get: () => 8,
-      //     });
-      //   }
-
-      //   // Connection API 위장
-      //   if (navigator.connection) {
-      //     Object.defineProperty(navigator, 'connection', {
-      //       get: () => ({
-      //         effectiveType: '4g',
-      //         type: 'wifi',
-      //         downlink: 10,
-      //         rtt: 50,
-      //         saveData: false,
-      //       }),
-      //     });
-      //   }
-
-      //   // Timing API 노이즈 추가
-      //   const originalNow = performance.now;
-      //   performance.now = function () {
-      //     return originalNow.call(this) + Math.random() * 0.1;
-      //   };
-      // });
-
-      this.logSuccess('Playwright-Extra with Stealth 초기화 완료');
+      this.logSuccess('기존 브라우저에 연결 완료');
+      this.logInfo('🌐 localhost:9222에서 실행 중인 브라우저에 연결되었습니다');
       return true;
     } catch (error) {
-      this.logError(`Playwright 초기화 실패: ${error.message}`);
+      this.logError(`CDP 연결 실패: ${error.message}`);
+      this.logError(
+        'Chrome을 --remote-debugging-port=9222 옵션으로 실행했는지 확인하세요.'
+      );
       return false;
     }
   }
@@ -455,10 +189,11 @@ class NaverShoppingScraper extends BaseScraper {
    * 보안 확인 페이지 처리 - 사용자가 수동으로 해결할 때까지 대기
    */
   async waitForSecurityCheck() {
+    this.logInfo('🛡️ waitForSecurityCheck 함수 시작');
     try {
       // 페이지 네비게이션 완료 대기
       await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
-      await this.randomWait(2000, 3000);
+      await this.randomWait(1000, 2000);
 
       let pageContent;
       try {
@@ -466,21 +201,86 @@ class NaverShoppingScraper extends BaseScraper {
         pageContent = await this.page.content();
       } catch (contentError) {
         this.logInfo('페이지 컨텐츠 가져오기 실패 - 잠시 후 재시도...');
-        await this.randomWait(3000, 5000);
+        await this.randomWait(2000, 3000);
         pageContent = await this.page.content();
       }
 
-      if (
-        pageContent.includes('보안 확인을 완료해 주세요') ||
-        pageContent.includes('보안문자') ||
-        pageContent.includes('captcha') ||
-        pageContent.includes('영수증')
-      ) {
-        this.logInfo('🚨 보안 확인 페이지 감지 - 사용자 입력 대기 중...');
-        this.logInfo('👆 브라우저에서 보안 확인을 완료해 주세요.');
+      const currentUrl = this.page.url();
+      const pageTitle = await this.page.title();
 
-        // 보안 확인이 완료될 때까지 대기 (최대 10분)
-        const maxWaitTime = 10 * 60 * 1000; // 10분
+      // 다양한 보안 확인 패턴 감지
+      const securityPatterns = [
+        '보안 확인을 완료해 주세요',
+        'captcha',
+        'CAPTCHA',
+        'WtmCaptcha',
+        'rcpt_answer',
+        '정답을 입력해주세요',
+        '이 절차는 귀하가 실제 사용자임을 확인',
+      ];
+
+      // 디버깅: URL과 제목 항상 출력
+      this.logInfo('🔍 보안 확인 페이지 검사 중...');
+      this.logInfo('📍 현재 URL: ' + currentUrl);
+      this.logInfo('📋 페이지 제목: ' + pageTitle);
+
+      const isSecurityCheck = securityPatterns.some(
+        (pattern) =>
+          pageContent.includes(pattern) || pageTitle.includes(pattern)
+      );
+
+      // 디버깅: 패턴 매칭 결과
+      const foundPatterns = securityPatterns.filter(
+        (pattern) =>
+          pageContent.includes(pattern) || pageTitle.includes(pattern)
+      );
+      this.logInfo(
+        '🎯 매칭된 패턴: ' +
+          (foundPatterns.length > 0 ? foundPatterns.join(', ') : '없음')
+      );
+
+      if (isSecurityCheck) {
+        this.logInfo('🚨🚨🚨 보안 확인 페이지 감지됨! 🚨🚨🚨');
+        this.logInfo('📍 현재 URL: ' + currentUrl);
+        this.logInfo('📋 페이지 제목: ' + pageTitle);
+        this.logInfo('🔍 감지된 보안 확인 유형을 분석 중...');
+
+        // 감지된 패턴 출력
+        const detectedPatterns = securityPatterns.filter(
+          (pattern) =>
+            pageContent.includes(pattern) || pageTitle.includes(pattern)
+        );
+        this.logInfo('🎯 감지된 패턴: ' + detectedPatterns.join(', '));
+
+        this.logInfo('');
+        this.logInfo(
+          '┌─────────────────────────────────────────────────────────┐'
+        );
+        this.logInfo(
+          '│                  🛡️ 보안 확인 필요 🛡️                    │'
+        );
+        this.logInfo(
+          '├─────────────────────────────────────────────────────────┤'
+        );
+        this.logInfo(
+          '│  👆 브라우저에서 직접 보안 확인을 완료해 주세요          │'
+        );
+        this.logInfo(
+          '│  📝 영수증 캡차, 문자 입력, 이미지 선택 등을 해결하세요  │'
+        );
+        this.logInfo(
+          '│  ⏰ 최대 15분간 대기합니다                              │'
+        );
+        this.logInfo(
+          '│  🔄 완료 후 자동으로 다음 단계로 진행됩니다             │'
+        );
+        this.logInfo(
+          '└─────────────────────────────────────────────────────────┘'
+        );
+        this.logInfo('');
+
+        // 보안 확인이 완료될 때까지 대기 (최대 15분)
+        const maxWaitTime = 15 * 60 * 1000; // 15분
         const checkInterval = 3000; // 3초마다 확인
         let waitedTime = 0;
 
@@ -490,64 +290,87 @@ class NaverShoppingScraper extends BaseScraper {
 
           // 현재 페이지 내용 다시 확인
           let currentContent;
+          let currentTitle;
           try {
             currentContent = await this.page.content();
+            currentTitle = await this.page.title();
           } catch (contentError) {
-            this.logInfo('페이지 컨텐츠 가져오기 실패 - 계속 대기...');
+            this.logInfo('⚠️ 페이지 컨텐츠 가져오기 실패 - 계속 대기...');
             continue;
           }
-          const currentUrl = this.page.url();
+
+          const newUrl = this.page.url();
+
+          // 보안 확인 패턴이 더 이상 없는지 확인
+          const stillHasSecurityCheck = securityPatterns.some(
+            (pattern) =>
+              currentContent.includes(pattern) || currentTitle.includes(pattern)
+          );
 
           // 보안 확인 페이지를 벗어났는지 확인
           if (
-            !currentContent.includes('보안 확인을 완료해 주세요') &&
-            !currentContent.includes('보안문자') &&
-            !currentContent.includes('captcha') &&
-            !currentContent.includes('영수증') &&
-            (currentUrl.includes('naver.com') ||
-              currentUrl.includes('shopping'))
+            !stillHasSecurityCheck &&
+            (newUrl.includes('naver.com') || newUrl.includes('shopping'))
           ) {
-            this.logSuccess('✅ 보안 확인 완료 감지 - 계속 진행합니다.');
+            this.logSuccess('');
+            this.logSuccess('🎉🎉🎉 보안 확인 완료 감지! 🎉🎉🎉');
+            this.logSuccess('📍 새로운 URL: ' + newUrl);
+            this.logSuccess('📋 새로운 제목: ' + currentTitle);
+            this.logSuccess('✅ 다음 단계로 진행합니다...');
+            this.logSuccess('');
             break;
           }
 
-          // 진행 상황 로그
-          const remainingMinutes = Math.ceil(
-            (maxWaitTime - waitedTime) / 60000
-          );
-          this.logInfo(
-            `⏳ 보안 확인 대기 중... (남은 시간: ${remainingMinutes}분)`
-          );
+          // 진행 상황 로그 (30초마다)
+          if (waitedTime % 30000 === 0) {
+            const remainingMinutes = Math.ceil(
+              (maxWaitTime - waitedTime) / 60000
+            );
+            this.logInfo(
+              `⏳ 보안 확인 대기 중... (남은 시간: ${remainingMinutes}분)`
+            );
+            this.logInfo(`📍 현재 URL: ${newUrl}`);
+          }
         }
 
         if (waitedTime >= maxWaitTime) {
-          this.logError('⚠️ 보안 확인 대기 시간 초과 (10분)');
+          this.logError('⚠️ 보안 확인 대기 시간 초과 (15분)');
           throw new Error('보안 확인 대기 시간 초과');
         }
 
-        // CAPTCHA 완료 후 세션 상태 확인
-        this.logInfo('🔍 CAPTCHA 완료 후 세션 상태 확인 중...');
+        // 보안 확인 완료 후 세션 상태 확인
+        this.logInfo('🔍 보안 확인 완료 후 세션 상태 확인 중...');
+        await this.randomWait(2000, 3000);
 
         // 현재 쿠키 확인
         const cookies = await this.context.cookies();
         this.logInfo(`🍪 보유 쿠키 수: ${cookies.length}`);
 
-        cookies.forEach((cookie, index) => {
-          this.logInfo(
-            `🍪 쿠키 ${index + 1}: ${cookie.name} = ${cookie.value.substring(
-              0,
-              20
-            )}...`
-          );
-        });
+        // 중요 쿠키만 표시 (너무 많은 로그 방지)
+        const importantCookies = cookies.filter(
+          (cookie) =>
+            cookie.name.includes('NID') ||
+            cookie.name.includes('session') ||
+            cookie.name.includes('auth')
+        );
+
+        if (importantCookies.length > 0) {
+          importantCookies.forEach((cookie, index) => {
+            this.logInfo(
+              `🍪 주요 쿠키 ${index + 1}: ${
+                cookie.name
+              } = ${cookie.value.substring(0, 20)}...`
+            );
+          });
+        }
 
         // 페이지 URL과 상태 확인
         const finalUrl = this.page.url();
-        this.logInfo(`📍 CAPTCHA 완료 후 최종 URL: ${finalUrl}`);
+        this.logInfo(`📍 보안 확인 완료 후 최종 URL: ${finalUrl}`);
 
         // 페이지 타이틀 확인
-        const pageTitle = await this.page.title();
-        this.logInfo(`📋 페이지 제목: ${pageTitle}`);
+        const finalPageTitle = await this.page.title();
+        this.logInfo(`📋 페이지 제목: ${finalPageTitle}`);
 
         // 페이지에 검색창이 있는지 확인
         const hasSearchInput =
@@ -555,10 +378,18 @@ class NaverShoppingScraper extends BaseScraper {
         this.logInfo(
           `🔍 검색창 존재 여부: ${hasSearchInput ? '있음' : '없음'}`
         );
+
+        this.logSuccess('✅ 세션 상태 확인 완료 - 정상적으로 진행 중');
+      } else {
+        // 보안 확인 페이지가 감지되지 않았을 때
+        this.logInfo('✅ 보안 확인 페이지 없음 - 정상 진행');
       }
     } catch (error) {
       this.logError(`보안 확인 처리 오류: ${error.message}`);
-      throw error;
+      // 보안 확인 에러는 치명적이지 않을 수 있으므로 경고만 출력
+      this.logInfo(
+        '⚠️ 보안 확인 처리에서 오류가 발생했지만 계속 진행합니다...'
+      );
     }
   }
 
@@ -724,15 +555,422 @@ class NaverShoppingScraper extends BaseScraper {
   }
 
   /**
-   * 네이버 쇼핑 검색 프로세스 수행
+   * 특정 상품 ID가 포함된 상품 클릭하는 시나리오
    */
-  async scrapeProduct(searchKeyword = '의자') {
+  async findAndClickProduct(searchKeyword, productId) {
     if (!this.page) {
       await this.init();
     }
 
     try {
-      // 네이버 쇼핑 모바일 검색 홈페이지 직접 접속
+      // 1단계: 네이버 메인 페이지 접속
+      this.logInfo('네이버 메인 페이지 접속 중...');
+      await this.page.goto('https://www.naver.com', {
+        waitUntil: 'domcontentloaded',
+        timeout: this.options.timeout,
+      });
+
+      await this.randomWait(2000, 4000);
+      this.logSuccess('네이버 메인 페이지 접속 완료');
+
+      // 보안 확인 페이지 처리
+      await this.waitForSecurityCheck();
+
+      // 2단계: 네이버 쇼핑 홈 페이지 접속
+      this.logInfo('네이버 쇼핑 홈 페이지 접속 중...');
+      await this.page.goto('https://search.shopping.naver.com/home', {
+        waitUntil: 'domcontentloaded',
+        timeout: this.options.timeout,
+      });
+
+      await this.randomWait(2000, 4000);
+      this.logSuccess('네이버 쇼핑 홈 페이지 접속 완료');
+
+      // 보안 확인 페이지 처리
+      await this.waitForSecurityCheck();
+
+      // 3단계: 검색창 찾고 검색어 입력
+      this.logInfo(`검색창에서 "${searchKeyword}" 검색 중...`);
+
+      // 검색창 찾기 (네이버 쇼핑 홈 페이지의 다양한 검색창 패턴)
+      this.logInfo('검색창을 찾는 중...');
+
+      const searchInputSelectors = [
+        'input#input_text',
+        'input[placeholder*="상품명 또는 브랜드"]',
+        'input[class*="_searchInput_input_text"]',
+        'input[class*="_ac_input"]',
+        'input[data-shp-area-id="input"]',
+        'input[name="query"]',
+        'input[enterkeyhint="search"]',
+        'input[type="text"]',
+      ];
+
+      let searchInput = null;
+      let foundSelector = '';
+
+      for (const selector of searchInputSelectors) {
+        try {
+          this.logInfo(`검색창 선택자 시도: ${selector}`);
+          searchInput = await this.page.waitForSelector(selector, {
+            timeout: 3000,
+          });
+          if (searchInput) {
+            foundSelector = selector;
+            this.logSuccess(`✅ 검색창 발견: ${selector}`);
+            break;
+          }
+        } catch (error) {
+          this.logInfo(`❌ 선택자 실패: ${selector}`);
+          continue;
+        }
+      }
+
+      if (!searchInput) {
+        // 페이지의 모든 input을 찾아서 디버깅 정보 출력
+        const allInputs = await this.page.evaluate(() => {
+          const inputs = Array.from(document.querySelectorAll('input'));
+          return inputs.map((input) => ({
+            id: input.id,
+            name: input.name,
+            type: input.type,
+            placeholder: input.placeholder,
+            className: input.className,
+            value: input.value,
+          }));
+        });
+
+        this.logError(
+          '❌ 검색창을 찾을 수 없습니다. 페이지의 모든 input 요소:'
+        );
+        allInputs.forEach((input, index) => {
+          console.log(
+            `${index + 1}. ID: ${input.id}, Name: ${input.name}, Type: ${
+              input.type
+            }, Placeholder: ${input.placeholder}, Class: ${input.className}`
+          );
+        });
+
+        throw new Error('검색창을 찾을 수 없습니다');
+      }
+
+      // 검색어 입력
+      await searchInput.click();
+      await this.randomWait(500, 1000);
+
+      await searchInput.fill('');
+      await this.randomWait(200, 400);
+
+      await searchInput.type(searchKeyword);
+      await this.randomWait(500, 1000);
+
+      // 검색 실행 (여러 방법 시도)
+      this.logInfo('검색 실행 중...');
+
+      try {
+        // 방법 1: Enter 키로 검색 (가장 자연스러운 방법)
+        this.logInfo('Enter 키로 검색 시도...');
+        await searchInput.press('Enter');
+        await this.randomWait(2000, 4000);
+      } catch (enterError) {
+        this.logInfo('Enter 키 실패, 검색 버튼 클릭 시도...');
+
+        // 방법 2: 검색 버튼 클릭
+        const searchButtonSelectors = [
+          'button[data-shp-area-id="search"]',
+          'button[class*="searchInput"][class*="search"]',
+          'button[class*="_searchInput_btn"]',
+          'button:has(svg)',
+          'button[type="submit"]',
+          '.search_btn',
+          '[class*="search"][class*="btn"]',
+        ];
+
+        let searchButton = null;
+        for (const btnSelector of searchButtonSelectors) {
+          try {
+            searchButton = await this.page.$(btnSelector);
+            if (searchButton) {
+              this.logInfo(`검색 버튼 발견: ${btnSelector}`);
+              await searchButton.click();
+              await this.randomWait(2000, 4000);
+              break;
+            }
+          } catch (btnError) {
+            continue;
+          }
+        }
+
+        if (!searchButton) {
+          this.logInfo('검색 버튼도 찾을 수 없음 - form submit 시도...');
+
+          // 방법 3: form submit
+          await this.page.evaluate((selector) => {
+            const input = document.querySelector(selector);
+            if (input && input.form) {
+              input.form.submit();
+            }
+          }, foundSelector);
+          await this.randomWait(2000, 4000);
+        }
+      }
+
+      // 검색 결과 페이지 로딩 대기
+      await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 });
+      await this.randomWait(3000, 5000);
+
+      this.logSuccess(`"${searchKeyword}" 검색 완료`);
+
+      // 보안 확인 페이지 처리
+      await this.waitForSecurityCheck();
+
+      // 4단계: 특정 상품 ID가 포함된 상품 찾기 및 클릭
+      this.logInfo(`상품 ID "${productId}"가 포함된 상품 찾는 중...`);
+
+      // 페이지에서 해당 상품 ID를 포함한 요소 찾기
+      this.logInfo('페이지에서 상품 요소 검색 중...');
+
+      const productSelectors = [
+        `[href*="${productId}"]`,
+        `[data-nclick*="${productId}"]`,
+        `[onclick*="${productId}"]`,
+        `[data-product-id*="${productId}"]`,
+        `[data-id*="${productId}"]`,
+        `[id*="${productId}"]`,
+      ];
+
+      let productElement = null;
+      let foundProductSelector = '';
+
+      // 첫 번째 시도: 현재 화면에서 찾기
+      for (const selector of productSelectors) {
+        try {
+          this.logInfo(`상품 선택자 시도: ${selector}`);
+          productElement = await this.page.$(selector);
+          if (productElement) {
+            foundProductSelector = selector;
+            this.logSuccess(`✅ 상품 요소 발견: ${selector}`);
+            break;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      if (!productElement) {
+        this.logInfo(
+          '현재 화면에서 상품을 찾지 못함 - 스크롤하여 더 많은 상품 로드 중...'
+        );
+
+        // 점진적으로 스크롤하면서 상품 찾기
+        let scrollAttempts = 0;
+        const maxScrollAttempts = 5;
+
+        while (scrollAttempts < maxScrollAttempts && !productElement) {
+          scrollAttempts++;
+          this.logInfo(`스크롤 시도 ${scrollAttempts}/${maxScrollAttempts}...`);
+
+          // 페이지 스크롤
+          await this.page.evaluate((attempt) => {
+            const scrollHeight = document.body.scrollHeight;
+            const scrollStep = scrollHeight / 5;
+            window.scrollTo(0, scrollStep * attempt);
+          }, scrollAttempts);
+
+          await this.randomWait(2000, 3000);
+
+          // 다시 상품 찾기
+          for (const selector of productSelectors) {
+            try {
+              productElement = await this.page.$(selector);
+              if (productElement) {
+                foundProductSelector = selector;
+                this.logSuccess(
+                  `✅ 스크롤 후 상품 발견: ${selector} (시도 ${scrollAttempts})`
+                );
+                break;
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+        }
+
+        if (!productElement) {
+          // 페이지의 모든 링크에서 상품 ID 검색
+          this.logInfo(
+            '선택자로 찾지 못함 - 페이지의 모든 링크에서 상품 ID 검색 중...'
+          );
+
+          const allLinks = await this.page.evaluate((id) => {
+            const links = Array.from(document.querySelectorAll('a[href]'));
+            return links
+              .filter((link) => link.href.includes(id))
+              .map((link) => ({
+                href: link.href,
+                text: link.textContent?.trim() || '',
+                className: link.className,
+                id: link.id,
+              }))
+              .slice(0, 10); // 최대 10개만
+          }, productId);
+
+          this.logInfo(
+            `상품 ID "${productId}"를 포함한 링크 ${allLinks.length}개 발견:`
+          );
+          allLinks.forEach((link, index) => {
+            console.log(`${index + 1}. ${link.text} -> ${link.href}`);
+          });
+
+          if (allLinks.length > 0) {
+            // 첫 번째 링크 클릭 시도
+            productElement = await this.page.$(`a[href*="${productId}"]`);
+            if (productElement) {
+              foundProductSelector = `a[href*="${productId}"]`;
+              this.logSuccess('✅ 일반 링크 검색으로 상품 발견');
+            }
+          }
+        }
+
+        if (!productElement) {
+          throw new Error(
+            `상품 ID "${productId}"를 포함한 상품을 찾을 수 없습니다`
+          );
+        }
+      }
+
+      // 상품이 보이도록 스크롤
+      await productElement.scrollIntoViewIfNeeded();
+      await this.randomWait(1000, 2000);
+
+      this.logSuccess(
+        `상품 ID "${productId}" 포함 상품 발견! (${foundProductSelector})`
+      );
+
+      // 상품 클릭
+      try {
+        await productElement.click();
+      } catch (clickError) {
+        this.logInfo('일반 클릭 실패 - 강제 클릭 시도...');
+        await this.page.evaluate((selector) => {
+          const element = document.querySelector(selector);
+          if (element) {
+            element.click();
+          }
+        }, foundProductSelector);
+      }
+
+      this.logSuccess(`상품 클릭 완료 - 상품 상세 페이지로 이동`);
+
+      // 5단계: 새 탭 대기 및 전환
+      this.logInfo('새 탭 열림을 대기 중...');
+      await this.randomWait(2000, 3000); // 새 탭 생성 대기
+
+      // 모든 페이지(탭) 가져오기
+      const pages = this.context.pages();
+      this.logInfo(`현재 탭 개수: ${pages.length}`);
+
+      // 새로 생성된 탭 찾기 (상품 페이지)
+      let productPage = null;
+
+      // 상품 ID가 포함된 카탈로그 페이지 찾기
+      for (const page of pages) {
+        const url = page.url();
+        if (url.includes(`search.shopping.naver.com/catalog/${productId}`)) {
+          productPage = page;
+          this.logSuccess(`🎯 상품 페이지 탭 발견: ${url}`);
+          break;
+        }
+      }
+
+      if (productPage && productPage !== this.page) {
+        this.logSuccess(`✅ 새 탭으로 전환`);
+        this.page = productPage; // 현재 페이지를 새 탭으로 변경
+      } else {
+        this.logInfo('⚠️ 새 탭을 찾지 못했거나 기존 탭에서 상품 페이지가 열림');
+      }
+
+      // 페이지 로딩 대기
+      await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 });
+      await this.randomWait(3000, 5000);
+
+      // 보안 확인 페이지 처리
+      await this.waitForSecurityCheck();
+
+      const finalUrl = this.page.url();
+      this.logInfo(`최종 URL: ${finalUrl}`);
+
+      // 6단계: 상품 페이지 HTML 저장
+      this.logSuccess('상품 상세 페이지 HTML 저장 중...');
+
+      try {
+        const htmlContent = await this.page.content();
+        const savedPath = await this.saveProductHtml(htmlContent, productId);
+
+        this.logSuccess('시나리오 완료 - 상품 상세 페이지에서 대기 중');
+        this.logInfo(`📁 HTML 파일 저장됨: ${savedPath}`);
+        this.logInfo(`📊 HTML 길이: ${htmlContent.length.toLocaleString()}자`);
+
+        // 무한 대기 (사용자 조작 허용)
+        this.logInfo('사용자 조작을 위해 무한 대기 중... (Ctrl+C로 종료)');
+        while (true) {
+          await this.randomWait(10000, 15000);
+          this.logInfo('대기 중...');
+        }
+      } catch (saveError) {
+        this.logError(`HTML 저장 실패: ${saveError.message}`);
+        this.logInfo('HTML 저장에 실패했지만 계속 진행합니다...');
+
+        this.logSuccess('시나리오 완료 - 상품 상세 페이지에서 대기 중');
+
+        // 무한 대기 (사용자 조작 허용)
+        this.logInfo('사용자 조작을 위해 무한 대기 중... (Ctrl+C로 종료)');
+        while (true) {
+          await this.randomWait(10000, 15000);
+          this.logInfo('대기 중...');
+        }
+      }
+    } catch (error) {
+      this.logError(`시나리오 실행 실패: ${error.message}`);
+
+      // 에러 시 스크린샷 저장
+      if (this.page) {
+        try {
+          await this.page.screenshot({
+            path: `error-scenario-${Date.now()}.png`,
+            fullPage: true,
+          });
+          this.logInfo('에러 스크린샷 저장됨');
+        } catch (screenshotError) {
+          this.logError(`스크린샷 저장 실패: ${screenshotError.message}`);
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * 네이버 쇼핑 검색 프로세스 수행
+   */
+  async scrapeProduct(searchKeyword) {
+    if (!this.page) {
+      await this.init();
+    }
+
+    try {
+      // 1단계: 네이버 메인 페이지 접속 (세션 및 쿠키 설정)
+      this.logInfo('네이버 메인 페이지 접속 중...');
+      await this.page.goto('https://www.naver.com', {
+        waitUntil: 'domcontentloaded',
+        timeout: this.options.timeout,
+      });
+
+      // 네이버 메인 페이지 로딩 대기
+      await this.randomWait(2000, 4000);
+      this.logSuccess('네이버 메인 페이지 접속 완료');
+
+      // 2단계: 네이버 쇼핑 모바일 검색 홈페이지 접속
       this.logInfo('네이버 쇼핑 모바일 검색 페이지 접속 중...');
       const url = 'https://search.shopping.naver.com/home';
 
@@ -1061,6 +1299,50 @@ class NaverShoppingScraper extends BaseScraper {
   }
 
   /**
+   * 상품 페이지 HTML을 파일로 저장
+   */
+  async saveProductHtml(htmlContent, productId = null) {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const productIdStr = productId ? `_${productId}` : '';
+      const filename = `result/naver-product${productIdStr}_${timestamp}.html`;
+
+      // result 디렉토리가 없으면 생성
+      const resultDir = 'result';
+      if (!fs.existsSync(resultDir)) {
+        await fsPromises.mkdir(resultDir, { recursive: true });
+        this.logInfo('📁 result 디렉토리 생성됨');
+      }
+
+      // HTML 내용에 메타데이터 추가
+      const metaComment = `<!--
+=== 네이버 상품 페이지 HTML ===
+상품 ID: ${productId || 'Unknown'}
+수집 시간: ${new Date().toISOString()}
+파일 크기: ${htmlContent.length.toLocaleString()} 문자
+수집 도구: NaverShoppingScraper (CDP 연결)
+-->
+`;
+
+      const htmlWithMeta = metaComment + htmlContent;
+
+      await fsPromises.writeFile(filename, htmlWithMeta, 'utf8');
+      this.logSuccess(`상품 HTML 파일 저장 완료: ${filename}`);
+
+      // 파일 크기 정보 출력
+      const stats = await fsPromises.stat(filename);
+      this.logInfo(
+        `📊 저장된 파일 크기: ${(stats.size / 1024 / 1024).toFixed(2)} MB`
+      );
+
+      return filename;
+    } catch (error) {
+      this.logError(`상품 HTML 파일 저장 실패: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * 네이버 쇼핑 홈페이지 스크래핑 실행
    */
   async scrapeHomepage() {
@@ -1109,10 +1391,11 @@ class NaverShoppingScraper extends BaseScraper {
         this.context = null;
       }
       if (this.browser) {
+        // CDP 연결만 해제, 브라우저는 종료하지 않음
         await this.browser.close();
         this.browser = null;
       }
-      this.logSuccess('Playwright 브라우저 종료 완료');
+      this.logSuccess('브라우저 연결 해제 완료 (브라우저는 계속 실행 중)');
 
       // 부모 클래스 정리 호출
       await super.close();

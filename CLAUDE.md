@@ -9,6 +9,7 @@ A Node.js web scraping application that extracts business ranking data from Nave
 ## Commands
 
 ### Development
+
 ```bash
 # Run the scraper with default settings (map mode, keyword: 치킨)
 npm start
@@ -25,14 +26,18 @@ node index.js map "미용실" 20
 node index.js smartstore "https://smartstore.naver.com/wodnr7762/products/8464846750"
 node index.js smartstore "https://smartstore.naver.com/store123/products/123456"
 
+# Example searches - Naver Shopping
+node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?cat_id=50003299&frm=NVSCVUI&query=%EC%9D%98%EC%9E%90"
+
 # Note: maxResults is only used in map mode
 ```
 
 ### Configuration
+
 ```bash
 # Environment variables for logging control
 set ENABLE_LOGGING=false    # Disable all logging
-set LOG_REQUESTS=false      # Disable request logging  
+set LOG_REQUESTS=false      # Disable request logging
 set LOG_RESPONSES=false     # Disable response logging
 set LOG_ERRORS=false        # Disable error logging
 set LOG_DIRECTORY=custom    # Custom log directory
@@ -51,7 +56,7 @@ set LOG_DIRECTORY=custom    # Custom log directory
 ### Data Flow
 
 1. **Keyword Analysis**: CategoryDetector determines business type from search keywords
-2. **Coordinate Resolution**: CoordinateUtils gets location coordinates for geo-targeted searches  
+2. **Coordinate Resolution**: CoordinateUtils gets location coordinates for geo-targeted searches
 3. **GraphQL Query Building**: Category-specific payload builders create optimized queries
 4. **API Communication**: HttpClient executes paginated requests with 500ms rate limiting
 5. **Response Processing**: ResponseParser normalizes data from multiple query types (regular + ads)
@@ -61,9 +66,9 @@ set LOG_DIRECTORY=custom    # Custom log directory
 
 The application uses category-specific GraphQL queries to optimize data extraction:
 
-- **Restaurant queries**: `getRestaurants` + `getAdBusinessList` 
+- **Restaurant queries**: `getRestaurants` + `getAdBusinessList`
 - **Hospital queries**: `getHospitals` + medical-specific fields
-- **Beauty queries**: `getHairShops` + beauty-specific fields  
+- **Beauty queries**: `getHairShops` + beauty-specific fields
 - **Accommodation queries**: `getAccommodations` + lodging-specific fields
 - **Place queries**: Generic `getPlaces` for other business types
 
@@ -77,9 +82,9 @@ Each category has dedicated payload builders in `src/graphql/payloads/` and quer
 
 ### Output Structure
 
-- **CSV files**: `result/naver_stores_{keyword}_{timestamp}.csv` 
+- **CSV files**: `result/naver_stores_{keyword}_{timestamp}.csv`
 - **Request logs**: `log/requests/` (when enabled)
-- **Response logs**: `log/responses/` (when enabled)  
+- **Response logs**: `log/responses/` (when enabled)
 - **Error logs**: `log/errors/` (when enabled)
 
 ## Key Features
