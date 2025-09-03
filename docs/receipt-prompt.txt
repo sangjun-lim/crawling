@@ -11,10 +11,12 @@ def ask_about_captcha_base64(base64_image_str, rcpt_text):
         예) 구매한 물건 수는? → 7
         예) 전화번호 끝자리는? → 3
         예) 2kg → 2
-        예) 총 몇개는 수량 세로 열을 모두 더해서 계산하면 돼
+        예) 총 몇개는 (수량) 세로 열을 모두 더해서 계산하면 돼
         답변중에 특수문자는 없습니다.
+        예) OOO의 한 개 당 가격은 얼마입니까? -> 해당 이름을 가진 상품의 (가격|단가) 열을 보면됨.
+        예) 모든 물건의 총 구매 금액은 얼마입니까? -> (총합|합|합계) 열을 모두 더해서 계산하면 돼.
         예) 정답이 0.5 이런건 없습니다.
-        답변중에 영어는 없습니다.
+        답변 중에 영어는 없습니다.
         질문: {rcpt_text}
     """
     response = openai.chat.completions.create(
@@ -31,3 +33,4 @@ def ask_about_captcha_base64(base64_image_str, rcpt_text):
         ],
     )
     return response.choices[0].message.content.strip()
+

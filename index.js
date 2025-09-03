@@ -1,6 +1,16 @@
-import 'dotenv/config';
+// 환경별 .env 파일 로딩
+import dotenv from 'dotenv';
 import NaverStoreScraper from './src/core/NaverStoreScraper.js';
 import NaverSmartStoreScraper from './src/core/NaverSmartStoreScraper.js';
+
+const env = process.env.NODE_ENV || 'development';
+
+// 환경별 파일 로딩 (우선순위: 환경별 → 로컬 → 기본)
+dotenv.config({ path: `.env.${env}` });
+dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env' });
+
+console.log(`🔧 실행 환경: ${env}`);
 
 async function main() {
   const startTime = Date.now();
@@ -22,6 +32,9 @@ async function main() {
 
     // 프록시 옵션
     proxy: process.env.PROXY_SERVER || null,
+
+    // gemini
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
   };
 
   try {

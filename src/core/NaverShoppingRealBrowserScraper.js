@@ -2,6 +2,7 @@ import BaseScraper from './BaseScraper.js';
 import { connect } from 'puppeteer-real-browser';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 class NaverShoppingRealBrowserScraper extends BaseScraper {
   constructor(options = {}) {
@@ -17,6 +18,11 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
 
     this.browser = null;
     this.page = null;
+
+    // 영수증 CAPTCHA 데이터 대기용 Promise 관리
+    this.waitingForReceiptData = false;
+    this.receiptDataPromise = null;
+    this.resolveReceiptData = null;
   }
 
   async init() {
@@ -48,54 +54,11 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       this.browser = browser;
       this.page = page;
 
-      // 네트워크 요청/응답 로깅 설정
-      this.page.on('request', async (request) => {
-        const url = request.url();
-        if (url.includes('shopping.naver.com') || url.includes('search')) {
-          this.logInfo(`🔵 REQUEST: ${request.method()} ${url}`);
-          this.logInfo(
-            `📤 Headers: ${JSON.stringify(request.headers(), null, 2)}`
-          );
+      // 브라우저의 모든 탭 모니터링 설정
+      this.setupGlobalNetworkMonitoring();
 
-          // 쿠키 정보도 로깅
-          const cookies = await this.page.cookies(url);
-          if (cookies.length > 0) {
-            this.logInfo(`🍪 Cookies: ${JSON.stringify(cookies, null, 2)}`);
-          } else {
-            this.logInfo(`🍪 Cookies: 없음`);
-          }
-
-          const postData = request.postData();
-          if (postData) {
-            this.logInfo(`📤 Body: ${postData}`);
-          }
-        }
-      });
-
-      this.page.on('response', async (response) => {
-        const url = response.url();
-        if (url.includes('shopping.naver.com') || url.includes('search')) {
-          this.logInfo(`🔴 RESPONSE: ${response.status()} ${url}`);
-          this.logInfo(
-            `📥 Headers: ${JSON.stringify(response.headers(), null, 2)}`
-          );
-
-          // 418 에러인 경우 응답 내용도 확인
-          if (response.status() === 418) {
-            try {
-              const responseText = await response.text();
-              this.logInfo(
-                `📄 418 응답 내용 (처음 500자): ${responseText.substring(
-                  0,
-                  500
-                )}`
-              );
-            } catch (textError) {
-              this.logInfo(`📄 응답 내용 읽기 실패: ${textError.message}`);
-            }
-          }
-        }
-      });
+      // 초기 페이지의 네트워크 모니터링 설정
+      this.setupPageNetworkMonitoring(this.page);
 
       this.logSuccess('puppeteer-real-browser 연결 완료');
       return true;
@@ -107,6 +70,122 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
   }
 
   /**
+   * 모든 탭에서 발생하는 새로운 탭 생성 이벤트를 모니터링하고 네트워크 리스너를 자동 설정
+   */
+  setupGlobalNetworkMonitoring() {
+    this.logInfo('🌐 전역 네트워크 모니터링 설정 중...');
+
+    this.browser.on('targetcreated', async (target) => {
+      try {
+        // 새로 생성된 대상이 페이지인지 확인
+        if (target.type() === 'page') {
+          const page = await target.page();
+          if (page) {
+            const url = page.url();
+            this.logInfo(`🆕 새 탭 생성 감지: ${url}`);
+
+            // 새 페이지에 네트워크 모니터링 설정
+            this.setupPageNetworkMonitoring(page);
+          }
+        }
+      } catch (error) {
+        this.logError(`새 탭 모니터링 설정 실패: ${error.message}`);
+      }
+    });
+  }
+
+  /**
+   * 특정 페이지에 대한 네트워크 모니터링 설정
+   */
+  setupPageNetworkMonitoring(page) {
+    try {
+      const pageUrl = page.url();
+      this.logInfo(`🔧 페이지 네트워크 모니터링 설정: ${pageUrl}`);
+
+      // request 이벤트 리스너 설정
+      page.on('request', async (request) => {
+        const url = request.url();
+
+        // 영수증 captcha API 요청 감지
+        if (
+          url.includes('ncpt.naver.com/v1/wcpt/m/challenge/receipt/question')
+        ) {
+          this.logInfo('🧐🧐🧐 영수증 CAPTCHA API 요청 감지! 🧐🧐🧐');
+          this.logInfo(`📍 API URL: ${url}`);
+          this.logInfo(`🔗 Referrer: ${request.headers().referer || 'None'}`);
+          this.logInfo(
+            `🍪 User-Agent: ${request.headers()['user-agent'] || 'None'}`
+          );
+
+          // URL에서 key 파라미터 추출
+          try {
+            const urlParams = new URL(url).searchParams;
+            const captchaKey = urlParams.get('key');
+            if (captchaKey) {
+              this.logInfo(`🔑 CAPTCHA Key: ${captchaKey}`);
+            }
+          } catch (urlError) {
+            this.logInfo(`URL 파라미터 추출 실패: ${urlError.message}`);
+          }
+
+          return; // 영수증 API는 별도 처리하므로 일반 로깅 생략
+        }
+      });
+
+      // response 이벤트 리스너 설정
+      page.on('response', async (response) => {});
+    } catch (error) {
+      this.logError(`페이지 네트워크 모니터링 설정 실패: ${error.message}`);
+    }
+  }
+
+  /**
+   * 영수증 CAPTCHA 데이터를 대기한 후 보안 확인 처리 시작
+   */
+  async waitForReceiptDataThenStartSecurityCheck() {
+    try {
+      this.logInfo('🕰️ 영수증 CAPTCHA 데이터 대기 시작... (최대 10초)');
+
+      // 영수증 데이터 대기 Promise 설정
+      this.waitingForReceiptData = true;
+      this.receiptDataPromise = new Promise((resolve) => {
+        this.resolveReceiptData = resolve;
+      });
+
+      // 10초 타임아웃과 함께 영수증 데이터 대기
+      const receiptData = await Promise.race([
+        this.receiptDataPromise,
+        new Promise((resolve) => {
+          setTimeout(() => {
+            this.logInfo(
+              '⏰ 영수증 데이터 대기 타임아웃 (10초) - 데이터 없이 진행'
+            );
+            resolve(null);
+          }, 10000);
+        }),
+      ]);
+
+      // Promise 정리
+      this.waitingForReceiptData = false;
+      this.receiptDataPromise = null;
+      this.resolveReceiptData = null;
+
+      // 보안 확인 처리 시작
+      if (receiptData) {
+        this.logInfo('✅ 영수증 데이터와 함께 보안 확인 처리 시작');
+      } else {
+        this.logInfo('⚠️ 영수증 데이터 없이 보안 확인 처리 시작');
+      }
+
+      await this.waitForSecurityCheck(receiptData);
+    } catch (error) {
+      this.logError(`영수증 데이터 대기 실패: ${error.message}`);
+      // 에러 시에도 보안 확인 처리는 실행
+      await this.waitForSecurityCheck(null);
+    }
+  }
+
+  /**
    * 랜덤 대기 시간 생성 (자연스러운 사용자 행동 시뮬레이션)
    */
   async randomWait(min = 800, max = 2500) {
@@ -114,11 +193,699 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
     await new Promise((resolve) => setTimeout(resolve, waitTime));
   }
 
+  // ==================== Phase 1: 기본 감지 및 추출 함수들 ====================
+
+  /**
+   * 캡차 페이지인지 확인
+   * @param {import('puppeteer').Page} page 검사할 페이지 객체
+   * @returns {Promise<boolean>} 캡차 페이지 여부
+   */
+  async isCaptchaPage(page) {
+    try {
+      // 캡차 관련 요소들 확인
+      const captchaElements = await page.evaluate(() => {
+        const imgElement = document.querySelector('#rcpt_img');
+        const infoElement = document.querySelector('#rcpt_info');
+        const answerElement = document.querySelector(
+          '#rcpt_answer, input[name="rcpt_answer"]'
+        );
+
+        return {
+          hasImage: !!imgElement,
+          hasInfo: !!infoElement,
+          hasAnswer: !!answerElement,
+        };
+      });
+
+      // 모든 요소가 존재해야 캡차 페이지로 판단
+      return (
+        captchaElements.hasImage &&
+        captchaElements.hasInfo &&
+        captchaElements.hasAnswer
+      );
+    } catch (error) {
+      this.logError(`캡차 페이지 확인 실패: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 캡차 이미지 URL 추출
+   * @param {import('puppeteer').Page} page 검사할 페이지 객체
+   * @returns {Promise<string|null>} 이미지 URL
+   */
+  async getCaptchaImageUrl(page) {
+    try {
+      const imageUrl = await page.$eval('#rcpt_img', (img) => img.src);
+      // this.logInfo(`✅ 캡차 이미지 URL 추출: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      this.logError(`캡차 이미지 URL 추출 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 캡차 질문 텍스트 추출
+   * @param {import('puppeteer').Page} page 검사할 페이지 객체
+   * @returns {Promise<string|null>} 질문 텍스트
+   */
+  async getCaptchaQuestionText(page) {
+    try {
+      const questionText = await page.$eval('#rcpt_info', (p) =>
+        p.textContent.trim()
+      );
+      this.logInfo(`✅ 캡차 질문 텍스트 추출: ${questionText}`);
+      return questionText;
+    } catch (error) {
+      this.logError(`캡차 질문 텍스트 추출 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 이미지 URL을 Base64로 변환
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @param {string} imageUrl 이미지 URL
+   * @returns {Promise<string|null>} Base64 인코딩된 이미지 데이터
+   */
+  async convertImageToBase64(page, imageUrl) {
+    try {
+      this.logInfo(`🔄 이미지 Base64 변환 시작: ${imageUrl}`);
+
+      const base64Data = await page.evaluate(async (url) => {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              // data:image/png;base64, 부분 제거하고 순수 base64만 반환
+              const base64 = reader.result.split(',')[1];
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          throw new Error(`이미지 로드 실패: ${error.message}`);
+        }
+      }, imageUrl);
+
+      this.logInfo(
+        `✅ 이미지 Base64 변환 완료 (크기: ${base64Data.length} 문자)`
+      );
+      return base64Data;
+    } catch (error) {
+      this.logError(`이미지 Base64 변환 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  // ==================== Phase 2: Gemini API 관련 함수들 ====================
+
+  /**
+   * Gemini API 클라이언트 초기화
+   * @returns {GoogleGenerativeAI|null} Gemini 클라이언트 객체
+   */
+  initGeminiClient() {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      this.logInfo('✅ Gemini API 클라이언트 초기화 완료');
+      return genAI;
+    } catch (error) {
+      this.logError(`Gemini API 클라이언트 초기화 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 캡차 해결 프롬프트 생성
+   * @param {string} questionText 캡차 질문 텍스트
+   * @returns {string} 완성된 프롬프트
+   */
+  createCaptchaPrompt(questionText) {
+    const prompt = `다음 이미지는 네이버 쇼핑 보안문제입니다.
+이미지 안에는 질문 문장과 영수증 정보가 같이 담겨있습니다.
+이미지를 분석해서 질문에 맞는 정답을 숫자 또는 단어 하나만 출력해주세요.
+영수증은 무조건 1장입니다. 여러장으로 보인다면 그건 영수증이 찢어진겁니다.
+찢어진 영수증은 합쳐서 분석하면 됩니다.
+전화번호는 xxx-xxxx, 또는 xxxx-xxxx 숫자 형태입니다.
+설명은 제외하고 정답만 주세요.
+답변중에 특수문자는 없습니다.
+답변 중에 영어는 없습니다.
+예) 총 금액은 얼마입니까? → 36400
+예) 구매한 물건 수는? → 7
+예) 전화번호 끝자리는? → 3
+예) 2kg → 2
+예) 총 몇개는 (수량) 세로 열을 모두 더해서 계산하면 돼.
+예) OOO의 한 개 당 가격은 얼마입니까? -> 해당 이름을 가진 상품의 (가격|단가) 열을 보면됨.
+예) 모든 물건의 총 구매 금액은 얼마입니까? -> (총합|합|합계) 열을 모두 더해서 계산하면 돼.
+예) 정답이 '0.5' 이런건 없습니다.
+질문: ${questionText}`;
+
+    this.logInfo('✅ 캡차 해결 프롬프트 생성 완료');
+    return prompt;
+  }
+
+  /**
+   * Gemini API로 이미지 분석
+   * @param {GoogleGenerativeAI} client Gemini 클라이언트
+   * @param {string} base64Image Base64 인코딩된 이미지
+   * @param {string} prompt 분석 프롬프트
+   * @returns {Promise<string|null>} AI 답변
+   */
+  async analyzeImageWithGemini(client, base64Image, prompt) {
+    try {
+      this.logInfo('🤖 Gemini API로 이미지 분석 시작...');
+
+      const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: 'image/png',
+          },
+        },
+        prompt,
+      ]);
+
+      const response = result.response;
+      const answer = response.text().trim();
+
+      this.logInfo(`🎯 Gemini API 분석 완료: "${answer}"`);
+      return answer;
+    } catch (error) {
+      this.logError(`Gemini API 이미지 분석 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  // ==================== Phase 3: 캡차 입력 및 제출 함수들 ====================
+
+  /**
+   * 캡차 답변 입력 필드 찾기
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @returns {Promise<import('puppeteer').ElementHandle|null>} 입력 필드 요소
+   */
+  async findCaptchaInputField(page) {
+    try {
+      const selectors = [
+        '#rcpt_answer',
+        'input[name="rcpt_answer"]',
+        'input[placeholder*="답"]',
+        'input[type="text"]',
+      ];
+
+      for (const selector of selectors) {
+        try {
+          const element = await page.$(selector);
+          if (element) {
+            this.logInfo(`✅ 캡차 입력 필드 발견: ${selector}`);
+            return element;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      throw new Error('캡차 입력 필드를 찾을 수 없습니다');
+    } catch (error) {
+      this.logError(`캡차 입력 필드 찾기 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 캡차 답변 입력
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @param {import('puppeteer').ElementHandle} inputElement 입력 필드 요소
+   * @param {string} answer 답변
+   * @returns {Promise<boolean>} 입력 성공 여부
+   */
+  async inputCaptchaAnswer(page, inputElement, answer) {
+    try {
+      this.logInfo(`📝 캡차 답변 입력 중: "${answer}"`);
+
+      // 기존 값 지우기
+      await inputElement.evaluate((input) => (input.value = ''));
+      await this.randomWait(300, 500);
+
+      // 답변 입력
+      await inputElement.type(answer, { delay: 50 });
+      await this.randomWait(300, 500);
+
+      // 입력된 값 확인
+      const inputValue = await inputElement.evaluate((input) => input.value);
+      if (inputValue === answer) {
+        this.logSuccess(`✅ 캡차 답변 입력 완료: "${inputValue}"`);
+        return true;
+      } else {
+        throw new Error(
+          `입력값 불일치: 예상="${answer}", 실제="${inputValue}"`
+        );
+      }
+    } catch (error) {
+      this.logError(`캡차 답변 입력 실패: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 캡차 제출 버튼 찾기
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @returns {Promise<import('puppeteer').ElementHandle|null>} 제출 버튼 요소
+   */
+  async findCaptchaSubmitButton(page) {
+    try {
+      // 정확한 캡차 확인 버튼 셀렉터 우선 시도
+      const primarySelector = '#cpt_confirm';
+      const element = await page.$(primarySelector);
+      if (element) {
+        this.logInfo(`✅ 캡차 제출 버튼 발견: ${primarySelector}`);
+        return element;
+      }
+
+      // 백업 셀렉터들
+      const backupSelectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button:contains("확인")',
+        'button:contains("제출")',
+        '.btn_confirm',
+        '.btn_submit',
+        '.btn_login',
+      ];
+
+      for (const selector of backupSelectors) {
+        try {
+          const backupElement = await page.$(selector);
+          if (backupElement) {
+            this.logInfo(`✅ 백업 캡차 제출 버튼 발견: ${selector}`);
+            return backupElement;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      throw new Error('캡차 제출 버튼을 찾을 수 없습니다');
+    } catch (error) {
+      this.logError(`캡차 제출 버튼 찾기 실패: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 캡차 검증 네트워크 응답 모니터링 설정
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @returns {Promise<{promise: Promise<any>, cleanup: Function}>} 응답 대기 Promise와 정리 함수
+   */
+  async setupCaptchaNetworkListener(page) {
+    let responseResolve, responseReject;
+    let responseTimeout;
+
+    const responsePromise = new Promise((resolve, reject) => {
+      responseResolve = resolve;
+      responseReject = reject;
+    });
+
+    const responseHandler = async (response) => {
+      const url = response.url();
+      if (
+        url.includes('/verify') &&
+        url.includes('ncpt.naver.com') &&
+        response.ok()
+      ) {
+        try {
+          this.logInfo('responseHandler 호출');
+          const responseText = await response.text();
+
+          // '스테이크 접시(responseText)'가 있는지 확인합니다.
+          if (responseText) {
+            // 접시가 있으면, 맛있게 먹습니다 (데이터 처리).
+            const data = JSON.parse(responseText);
+            this.logInfo(`✅ 드디어 진짜 응답 도착: ${responseText}`);
+            clearTimeout(responseTimeout);
+            responseResolve(data);
+          }
+          // const data = await response.json();
+          // this.logInfo(`🔍 캡차 검증 API 응답: ${JSON.stringify(data)}`);
+          // clearTimeout(responseTimeout);
+          // responseResolve(data);
+        } catch (error) {
+          this.logError(`캡차 검증 응답 파싱 실패: ${error}`);
+        }
+      }
+    };
+
+    page.on('response', responseHandler);
+
+    // 10초 타임아웃 설정
+    responseTimeout = setTimeout(() => {
+      page.off('response', responseHandler);
+      responseReject(new Error('캡차 검증 응답 대기 시간 초과'));
+    }, 10000);
+
+    const cleanup = () => {
+      page.off('response', responseHandler);
+      clearTimeout(responseTimeout);
+    };
+
+    return { promise: responsePromise, cleanup };
+  }
+
+  /**
+   * 캡차 제출
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @param {import('puppeteer').ElementHandle} submitButton 제출 버튼 요소
+   * @returns {Promise<{success: boolean, apiResponse?: any}>} 제출 결과
+   */
+  async submitCaptcha(page, submitButton) {
+    try {
+      this.logInfo('🚀 캡차 제출 중...');
+
+      // 네트워크 모니터링 설정
+      const { promise: responsePromise, cleanup } =
+        await this.setupCaptchaNetworkListener(page);
+
+      // 버튼 클릭
+      await submitButton.click();
+
+      try {
+        // API 응답 대기
+        const apiResponse = await responsePromise;
+        cleanup();
+
+        this.logSuccess('✅ 캡차 제출 및 응답 수신 완료');
+        return { success: true, apiResponse };
+      } catch (error) {
+        cleanup();
+        this.logInfo(
+          `⚠️ API 응답 대기 실패, 일반 제출로 진행: ${error.message}`
+        );
+        await this.randomWait(1000, 2000);
+        return { success: true };
+      }
+    } catch (error) {
+      this.logError(`캡차 제출 실패: ${error.message}`);
+      return { success: false };
+    }
+  }
+
+  // ==================== Phase 4: 검증 및 조합 함수들 ====================
+
+  /**
+   * 캡차 해결 성공 확인 (API 응답 기반)
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @param {any} apiResponse API 응답 객체 (선택적)
+   * @returns {Promise<boolean>} 해결 성공 여부
+   */
+  async isCaptchaSolved(page, apiResponse = null) {
+    try {
+      // 1. API 응답이 있으면 우선 확인
+      if (apiResponse) {
+        if (apiResponse.isTrue === true) {
+          this.logSuccess('🎉 캡차 해결 성공! (API 확인)');
+          return true;
+        } else if (apiResponse.isTrue === false) {
+          this.logError('❌ 캡차 답변이 틀렸습니다 (API 확인)');
+          return false;
+        }
+      }
+
+      // 2. UI 오류 메시지 확인
+      const errorMessage = await page.evaluate(() => {
+        // 1) rcpt_error_message 요소 우선 확인 (가장 정확)
+        const rcptErrorElement = document.getElementById('rcpt_error_message');
+        if (rcptErrorElement) {
+          const style = window.getComputedStyle(rcptErrorElement);
+          const isVisible =
+            style.display !== 'none' && style.visibility !== 'hidden';
+          if (
+            isVisible &&
+            rcptErrorElement.textContent &&
+            rcptErrorElement.textContent.trim()
+          ) {
+            return rcptErrorElement.textContent.trim();
+          }
+        }
+
+        // 2) 특정 오류 메시지 텍스트 확인
+        const bodyText = document.body.textContent || '';
+        if (
+          bodyText.includes('잘못 입력했습니다. 5초후 다음 문제로 변경됩니다.')
+        ) {
+          return '잘못 입력했습니다. 5초후 다음 문제로 변경됩니다.';
+        }
+
+        // 3) 일반적인 오류 요소 확인
+        const errorElements = document.querySelectorAll(
+          '.error, .err, [class*="error"], [class*="fail"], .msg_error, .error_message'
+        );
+        for (const element of errorElements) {
+          const style = window.getComputedStyle(element);
+          const isVisible =
+            style.display !== 'none' && style.visibility !== 'hidden';
+          if (isVisible && element.textContent && element.textContent.trim()) {
+            return element.textContent.trim();
+          }
+        }
+        return null;
+      });
+
+      if (errorMessage) {
+        this.logError(`❌ 오류 메시지 감지: ${errorMessage}`);
+        return false;
+      }
+
+      // 3. 페이지 상태 확인 (약간의 대기 후)
+      await this.randomWait(1000, 2000);
+
+      const stillCaptchaPage = await this.isCaptchaPage(page);
+      if (!stillCaptchaPage) {
+        this.logSuccess('🎉 캡차 해결 성공! (페이지 변경 확인)');
+        return true;
+      }
+
+      // 4. 기본적으로 결과 불명확으로 처리
+      this.logInfo('⚠️ 캡차 해결 상태 불명확, 재시도 필요할 수 있음');
+      return false;
+    } catch (error) {
+      this.logError(`캡차 해결 확인 실패: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 단일 캡차 해결 시도
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @returns {Promise<boolean>} 시도 성공 여부
+   */
+  async attemptCaptchaSolve(page) {
+    try {
+      this.logInfo('🎯 캡차 해결 시도 시작...');
+
+      // 1. 캡차 페이지 확인
+      const isCaptcha = await this.isCaptchaPage(page);
+      if (!isCaptcha) {
+        this.logInfo('ℹ️ 캡차 페이지가 아닙니다');
+        return true;
+      }
+
+      // 2. 이미지 URL과 질문 추출
+      const imageUrl = await this.getCaptchaImageUrl(page);
+      const questionText = await this.getCaptchaQuestionText(page);
+
+      if (!imageUrl || !questionText) {
+        throw new Error('이미지 URL 또는 질문 텍스트 추출 실패');
+      }
+
+      // 3. 이미지를 Base64로 변환
+      const base64Image = await this.convertImageToBase64(page, imageUrl);
+      if (!base64Image) {
+        throw new Error('이미지 Base64 변환 실패');
+      }
+
+      // 4. Gemini API로 분석
+      const geminiClient = this.initGeminiClient();
+      if (!geminiClient) {
+        throw new Error('Gemini API 클라이언트 초기화 실패');
+      }
+
+      const prompt = this.createCaptchaPrompt(questionText);
+      const answer = await this.analyzeImageWithGemini(
+        geminiClient,
+        base64Image,
+        prompt
+      );
+
+      if (!answer) {
+        throw new Error('Gemini API 분석 실패');
+      }
+
+      // 5. 답변 입력
+      const inputField = await this.findCaptchaInputField(page);
+      if (!inputField) {
+        throw new Error('입력 필드 찾기 실패');
+      }
+
+      const inputSuccess = await this.inputCaptchaAnswer(
+        page,
+        inputField,
+        answer
+      );
+      if (!inputSuccess) {
+        throw new Error('답변 입력 실패');
+      }
+
+      // 6. 제출
+      const submitButton = await this.findCaptchaSubmitButton(page);
+      if (!submitButton) {
+        throw new Error('제출 버튼 찾기 실패');
+      }
+
+      const submitResult = await this.submitCaptcha(page, submitButton);
+      if (!submitResult.success) {
+        throw new Error('캡차 제출 실패');
+      }
+
+      // 7. 해결 확인 (API 응답 포함)
+      const solved = await this.isCaptchaSolved(page, submitResult.apiResponse);
+      return solved;
+    } catch (error) {
+      this.logError(`캡차 해결 시도 실패: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 캡차 자동 해결 (재시도 포함)
+   * @param {import('puppeteer').Page} page 페이지 객체
+   * @param {number} maxAttempts 최대 시도 횟수
+   * @param {number} delayMs 재시도 간격 (밀리초)
+   * @returns {Promise<boolean>} 최종 해결 성공 여부
+   */
+  async solveCaptchaWithRetry(page, maxAttempts = 5, delayMs = 5200) {
+    this.logInfo(`🎲 캡차 자동 해결 시작 (최대 ${maxAttempts}회 시도)`);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      this.logInfo(`📍 시도 ${attempt}/${maxAttempts}`);
+
+      try {
+        const success = await this.attemptCaptchaSolve(page);
+
+        if (success) {
+          this.logSuccess(`🎉 캡차 해결 성공! (${attempt}회 시도)`);
+          return true;
+        } else {
+          this.logInfo(`❌ 시도 ${attempt} 실패`);
+
+          if (attempt < maxAttempts) {
+            this.logInfo(`⏳ ${delayMs / 1000}초 대기 후 재시도...`);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
+      } catch (error) {
+        this.logError(`시도 ${attempt} 에러: ${error.message}`);
+
+        if (attempt < maxAttempts) {
+          this.logInfo(`⏳ ${delayMs / 1000}초 대기 후 재시도...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+
+    this.logError(`💥 캡차 해결 실패 (${maxAttempts}회 모든 시도 실패)`);
+    return false;
+  }
+
+  /**
+   * 캡차 페이지를 자동으로 처리합니다. 캡차가 감지되면 Gemini API를 사용해 자동으로 해결합니다.
+   * @param {import('puppeteer').Page} page 검사할 페이지 객체
+   * @returns {Promise<{isCaptcha: boolean, autoSolved: boolean, imageUrl: string|null, question: string|null, error?: string}>} 캡챠 처리 결과
+   */
+  async handleCaptchaAutomatically(page) {
+    this.logInfo(`[Captcha Auto-Solve] 캡차 자동 감지 및 해결을 시작합니다...`);
+
+    // 캡챠 페이지 확인 (한 번만)
+    const isCaptcha = await this.isCaptchaPage(page);
+
+    if (isCaptcha) {
+      this.logInfo('✅ 캡챠 페이지 감지 성공!');
+
+      // 🚀 자동 해결 시도 (최대 5번, 각각 새로운 이미지/질문)
+      this.logInfo('🤖 캡차 자동 해결을 시도합니다...');
+      const autoSolved = await this.solveCaptchaWithRetry(page, 5, 5200);
+
+      if (autoSolved) {
+        this.logSuccess('🎉 캡차 자동 해결 성공!');
+        return {
+          isCaptcha: true,
+          autoSolved: true,
+          imageUrl: null, // 해결 성공 시 세부 정보는 불필요
+          question: null,
+        };
+      } else {
+        this.logError('❌ 캡차 자동 해결 실패, 수동 처리 필요');
+        return {
+          isCaptcha: true,
+          autoSolved: false,
+          imageUrl: null,
+          question: null,
+          error: '5번 시도 모두 실패',
+        };
+      }
+    } else {
+      this.logInfo('ℹ️ 캡챠 페이지가 아닙니다');
+      return {
+        isCaptcha: false,
+        autoSolved: false,
+        imageUrl: null,
+        question: null,
+      };
+    }
+  }
+
   /**
    * 보안 확인 페이지 처리 - 사용자가 수동으로 해결할 때까지 대기
+   * @param {Object|null} receiptData - 영수증 CAPTCHA 데이터 (있는 경우)
    */
-  async waitForSecurityCheck() {
-    this.logInfo('🛡️ waitForSecurityCheck 함수 시작');
+  async waitForSecurityCheck(receiptData = null) {
+    this.logInfo(
+      `🛡️ waitForSecurityCheck 함수 시작 (receiptData: ${
+        receiptData ? '있음' : '없음'
+      })`
+    );
+
+    // 영수증 데이터가 있으면 표시
+    if (receiptData && receiptData.receiptData) {
+      this.logInfo('');
+      this.logInfo('🧐🧐🧐 영수증 CAPTCHA 데이터 수신됨 🧐🧐🧐');
+      this.logInfo(`   • 질문: ${receiptData.receiptData.question}`);
+      this.logInfo(
+        `   • 이미지 있음: ${receiptData.receiptData.image ? '예' : '아니오'}`
+      );
+      if (receiptData.receiptData.image) {
+        this.logInfo(
+          `   • 이미지 크기: ${receiptData.receiptData.image.length} 문자`
+        );
+        this.logInfo(
+          `   • 이미지 형식: ${receiptData.receiptData.image.substring(
+            0,
+            30
+          )}...`
+        );
+      }
+      this.logInfo('');
+    }
     try {
       // 페이지 네비게이션 완료 대기
       await this.page
@@ -506,11 +1273,18 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
         this.logInfo('⚠️ 새 탭을 찾지 못함, 현재 탭에서 계속 진행');
       }
 
+      // 캡차 자동 처리
+      const captchaResult = await this.handleCaptchaAutomatically(this.page);
+
+      if (captchaResult.isCaptcha && !captchaResult.autoSolved) {
+        new Error('캡차 실패입니다.');
+      }
+
       // 페이지 로딩 완료 대기
       await this.randomWait(3000, 5000);
 
-      // 보안 확인 페이지 처리
-      await this.waitForSecurityCheck();
+      // 보안 확인 페이지 처리는 네트워크 인터셉터에서 자동 처리
+      // await this.waitForSecurityCheck(); // 제거 - 인터셉터에서 처리
 
       // 4-1단계: productId가 포함된 상품 찾기 (최대 10페이지)
       this.logInfo(
@@ -526,12 +1300,12 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
 
         // 현재 페이지에서 상품 찾기
         const productSelectors = [
-          `[href*="${productId}"]`,
-          `[data-nclick*="${productId}"]`,
-          `[onclick*="${productId}"]`,
-          `[data-product-id*="${productId}"]`,
-          `[data-i*="${productId}"]`,
-          `[data-id*="${productId}"]`,
+          `[data-i="${productId}"]`, // 정확한 data-i 매칭
+          `[data-shp-contents-id="${productId}"]`, // 정확한 contents-id 매칭
+          `[data-i*="${productId}"]`, // 부분 매칭 백업
+          `[data-shp-contents-id*="${productId}"]`, // 부분 매칭 백업
+          `a[href*="nvMid=${productId}"]`, // URL 파라미터 매칭
+          `a[href*="catalog/${productId}"]`, // 카탈로그 URL 매칭
         ];
 
         let productElement = null;
@@ -618,12 +1392,16 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
             if (nextButton) {
               await nextButton.click();
               await this.randomWait(2000, 4000);
-              currentPage++;
             } else {
-              this.logInfo('다음 페이지 버튼을 찾을 수 없거나 비활성화됨');
+              this.logInfo(
+                '다음 페이지 버튼을 찾을 수 없거나 비활성화됨 - 검색 종료'
+              );
               break;
             }
           }
+
+          // 페이지 번호 증가 (다음 버튼이 있든 없든)
+          currentPage++;
         }
       }
 
@@ -663,8 +1441,8 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       // 페이지 로딩 완료 대기
       await this.randomWait(2000, 4000);
 
-      // 보안 확인 페이지 처리
-      await this.waitForSecurityCheck();
+      // 보안 확인 페이지 처리는 네트워크 인터셉터에서 자동 처리
+      // await this.waitForSecurityCheck(); // 제거 - 인터셉터에서 처리
 
       const finalUrl = this.page.url();
       this.logInfo(`최종 URL: ${finalUrl}`);
