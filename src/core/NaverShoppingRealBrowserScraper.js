@@ -271,8 +271,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
    */
   async convertImageToBase64(page, imageUrl) {
     try {
-      this.logInfo(`🔄 이미지 Base64 변환 시작: ${imageUrl}`);
-
       const base64Data = await page.evaluate(async (url) => {
         try {
           const response = await fetch(url);
@@ -365,9 +363,16 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
     try {
       this.logInfo('🤖 Gemini API로 이미지 분석 시작...');
 
-      const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-      const result = await model.generateContent([
+      // 30초 타임아웃 설정
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Gemini API 호출 타임아웃 (30초)'));
+        }, 30000);
+      });
+
+      const analysisPromise = model.generateContent([
         {
           inlineData: {
             data: base64Image,
@@ -377,6 +382,9 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
         prompt,
       ]);
 
+      // Promise.race로 타임아웃과 API 호출 중 먼저 완료되는 것 반환
+      const result = await Promise.race([analysisPromise, timeoutPromise]);
+      
       const response = result.response;
       const answer = response.text().trim();
 
@@ -563,37 +571,23 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
   }
 
   /**
-   * 캡차 제출
+   * 캡차 제출 (단순 클릭만)
    * @param {import('puppeteer').Page} page 페이지 객체
    * @param {import('puppeteer').ElementHandle} submitButton 제출 버튼 요소
-   * @returns {Promise<{success: boolean, apiResponse?: any}>} 제출 결과
+   * @returns {Promise<{success: boolean}>} 제출 결과
    */
   async submitCaptcha(page, submitButton) {
     try {
       this.logInfo('🚀 캡차 제출 중...');
 
-      // 네트워크 모니터링 설정
-      const { promise: responsePromise, cleanup } =
-        await this.setupCaptchaNetworkListener(page);
-
       // 버튼 클릭
       await submitButton.click();
 
-      try {
-        // API 응답 대기
-        const apiResponse = await responsePromise;
-        cleanup();
+      // 클릭 후 약간의 대기
+      await this.randomWait(500, 1000);
 
-        this.logSuccess('✅ 캡차 제출 및 응답 수신 완료');
-        return { success: true, apiResponse };
-      } catch (error) {
-        cleanup();
-        this.logInfo(
-          `⚠️ API 응답 대기 실패, 일반 제출로 진행: ${error.message}`
-        );
-        await this.randomWait(1000, 2000);
-        return { success: true };
-      }
+      this.logSuccess('✅ 캡차 제출 완료');
+      return { success: true };
     } catch (error) {
       this.logError(`캡차 제출 실패: ${error.message}`);
       return { success: false };
@@ -603,32 +597,27 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
   // ==================== Phase 4: 검증 및 조합 함수들 ====================
 
   /**
-   * 캡차 해결 성공 확인 (API 응답 기반)
+   * 캡차 해결 성공 확인 (페이지 상태 기반)
    * @param {import('puppeteer').Page} page 페이지 객체
-   * @param {any} apiResponse API 응답 객체 (선택적)
+   * @param {any} _ API 응답 객체 (사용하지 않음, 호환성을 위해 유지)
    * @returns {Promise<boolean>} 해결 성공 여부
    */
-  async isCaptchaSolved(page, apiResponse = null) {
+  async isCaptchaSolved(page, _ = null) {
     try {
-      // 1. API 응답이 있으면 우선 확인
-      if (apiResponse) {
-        if (apiResponse.isTrue === true) {
-          this.logSuccess('🎉 캡차 해결 성공! (API 확인)');
-          return true;
-        } else if (apiResponse.isTrue === false) {
-          this.logError('❌ 캡차 답변이 틀렸습니다 (API 확인)');
-          return false;
-        }
-      }
+      // 답변 제출 후 약간의 대기 (서버 처리 시간 고려)
+      await this.randomWait(2000, 3000);
 
-      // 2. UI 오류 메시지 확인
+      // 1. 오류 메시지 확인 (가장 우선)
       const errorMessage = await page.evaluate(() => {
-        // 1) rcpt_error_message 요소 우선 확인 (가장 정확)
+        // rcpt_error_message 요소 확인 (가장 정확한 오류 표시)
         const rcptErrorElement = document.getElementById('rcpt_error_message');
         if (rcptErrorElement) {
           const style = window.getComputedStyle(rcptErrorElement);
           const isVisible =
-            style.display !== 'none' && style.visibility !== 'hidden';
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0';
+
           if (
             isVisible &&
             rcptErrorElement.textContent &&
@@ -638,7 +627,7 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
           }
         }
 
-        // 2) 특정 오류 메시지 텍스트 확인
+        // 기타 오류 메시지 텍스트 확인
         const bodyText = document.body.textContent || '';
         if (
           bodyText.includes('잘못 입력했습니다. 5초후 다음 문제로 변경됩니다.')
@@ -646,14 +635,28 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
           return '잘못 입력했습니다. 5초후 다음 문제로 변경됩니다.';
         }
 
-        // 3) 일반적인 오류 요소 확인
+        if (bodyText.includes('입력형식이 잘못되었습니다')) {
+          return '입력형식이 잘못되었습니다';
+        }
+
+        if (
+          bodyText.includes(
+            '형식에 맞지 않는 문자가 입력되었습니다. 다시 입력해주세요.'
+          )
+        ) {
+          return '형식에 맞지 않는 문자가 입력되었습니다. 다시 입력해주세요.';
+        }
+
+        // 일반적인 오류 요소 확인
         const errorElements = document.querySelectorAll(
           '.error, .err, [class*="error"], [class*="fail"], .msg_error, .error_message'
         );
         for (const element of errorElements) {
           const style = window.getComputedStyle(element);
           const isVisible =
-            style.display !== 'none' && style.visibility !== 'hidden';
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0';
           if (isVisible && element.textContent && element.textContent.trim()) {
             return element.textContent.trim();
           }
@@ -661,23 +664,63 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
         return null;
       });
 
+      // 오류 메시지가 있으면 처리
       if (errorMessage) {
         this.logError(`❌ 오류 메시지 감지: ${errorMessage}`);
+
+        // 형식 오류인 경우 새로고침 버튼 클릭
+        if (errorMessage.includes('형식에 맞지 않는 문자가 입력되었습니다')) {
+          this.logInfo('🔄 형식 오류 감지 - 캡차 새로고침 시도');
+
+          try {
+            // 새로고침 버튼 찾기
+            const reloadButton = await page.$('#rcpt_reload');
+            if (reloadButton) {
+              this.logInfo('✅ 캡차 새로고침 버튼 발견 - 클릭 중...');
+              await reloadButton.click();
+
+              // 새로고침 후 대기
+              await this.randomWait(2000, 3000);
+
+              this.logSuccess(
+                '🔄 캡차 새로고침 완료 - 새로운 캡차로 다시 시도'
+              );
+              // 새로고침했으므로 실패로 반환하여 다시 시도하게 함
+              return false;
+            } else {
+              this.logError('⚠️ 캡차 새로고침 버튼을 찾을 수 없음');
+            }
+          } catch (reloadError) {
+            this.logError(`캡차 새로고침 실패: ${reloadError.message}`);
+          }
+        }
+
         return false;
       }
 
-      // 3. 페이지 상태 확인 (약간의 대기 후)
-      await this.randomWait(1000, 2000);
-
+      // 2. 캡차 페이지 상태 확인
       const stillCaptchaPage = await this.isCaptchaPage(page);
-      if (!stillCaptchaPage) {
-        this.logSuccess('🎉 캡차 해결 성공! (페이지 변경 확인)');
-        return true;
-      }
 
-      // 4. 기본적으로 결과 불명확으로 처리
-      this.logInfo('⚠️ 캡차 해결 상태 불명확, 재시도 필요할 수 있음');
-      return false;
+      if (!stillCaptchaPage) {
+        this.logSuccess('🎉 캡차 해결 성공! (캡차 페이지를 벗어남)');
+        return true;
+      } else {
+        this.logInfo(
+          '⚠️ 여전히 캡차 페이지에 머물러 있음 - 답변이 틀렸거나 처리 중'
+        );
+
+        // 추가 대기 후 한번 더 확인 (서버 응답이 늦을 수 있음)
+        await this.randomWait(3000, 5000);
+
+        const finalCheck = await this.isCaptchaPage(page);
+        if (!finalCheck) {
+          this.logSuccess('🎉 캡차 해결 성공! (추가 대기 후 확인)');
+          return true;
+        } else {
+          this.logError('❌ 캡차 해결 실패 - 여전히 캡차 페이지에 머물러 있음');
+          return false;
+        }
+      }
     } catch (error) {
       this.logError(`캡차 해결 확인 실패: ${error.message}`);
       return false;
@@ -757,8 +800,8 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
         throw new Error('캡차 제출 실패');
       }
 
-      // 7. 해결 확인 (API 응답 포함)
-      const solved = await this.isCaptchaSolved(page, submitResult.apiResponse);
+      // 7. 해결 확인 (페이지 상태 기반)
+      const solved = await this.isCaptchaSolved(page);
       return solved;
     } catch (error) {
       this.logError(`캡차 해결 시도 실패: ${error.message}`);
