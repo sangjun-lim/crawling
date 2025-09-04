@@ -384,7 +384,7 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
 
       // Promise.race로 타임아웃과 API 호출 중 먼저 완료되는 것 반환
       const result = await Promise.race([analysisPromise, timeoutPromise]);
-      
+
       const response = result.response;
       const answer = response.text().trim();
 
@@ -1197,7 +1197,7 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       await this.page
         .waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 })
         .catch(() => {});
-      await this.randomWait(2000, 4000);
+      await this.randomWait(1500, 3000);
 
       this.logSuccess(`"${searchKeyword}" 통합검색 완료`);
 
@@ -1290,7 +1290,7 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       await moreLinkElement.click();
       this.logSuccess('네이버 가격비교 더보기 클릭 완료');
 
-      await this.randomWait(2000, 3000);
+      await this.randomWait(1000, 2000);
 
       // 4단계: 새 탭 전환
       this.logInfo('새 탭 전환 중...');
@@ -1324,7 +1324,7 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       }
 
       // 페이지 로딩 완료 대기
-      await this.randomWait(3000, 5000);
+      await this.randomWait(1500, 3000);
 
       // 보안 확인 페이지 처리는 네트워크 인터셉터에서 자동 처리
       // await this.waitForSecurityCheck(); // 제거 - 인터셉터에서 처리
@@ -1341,7 +1341,7 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       while (!productFound && currentPage <= maxPages) {
         this.logInfo(`페이지 ${currentPage}에서 상품 검색 중...`);
 
-        // 현재 페이지에서 상품 찾기
+        // 스크롤하면서 상품 찾기
         const productSelectors = [
           `[data-i="${productId}"]`, // 정확한 data-i 매칭
           `[data-shp-contents-id="${productId}"]`, // 정확한 contents-id 매칭
@@ -1353,47 +1353,115 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
 
         let productElement = null;
         let foundProductSelector = '';
+        let previousHeight = 0;
+        let scrollAttempts = 0;
+        const maxScrollAttempts = 20; // 최대 스크롤 시도 횟수
 
-        for (const selector of productSelectors) {
-          try {
-            productElement = await this.page.$(selector);
-            if (productElement) {
-              foundProductSelector = selector;
-              this.logSuccess(
-                `✅ 상품 발견: ${selector} (페이지 ${currentPage})`
+        // 페이지 맨 위로 이동
+        await this.page.evaluate(() => window.scrollTo(0, 0));
+        await this.randomWait(1000, 1500);
+
+        this.logInfo(`페이지 ${currentPage}에서 스크롤하며 상품 검색 시작...`);
+
+        // 연속적이고 자연스러운 스크롤로 상품 찾기
+        let lastScrollTime = Date.now();
+        let noNewContentCount = 0;
+
+        while (scrollAttempts < maxScrollAttempts && !productFound) {
+          scrollAttempts++;
+
+          // 매 5번째 스크롤마다 진행상황 로그
+          if (scrollAttempts % 5 === 1) {
+            this.logInfo(
+              `페이지 ${currentPage} - 스크롤 진행중... (${scrollAttempts}/${maxScrollAttempts})`
+            );
+          }
+
+          // 현재 위치에서 상품 찾기
+          for (const selector of productSelectors) {
+            try {
+              productElement = await this.page.$(selector);
+              if (productElement) {
+                foundProductSelector = selector;
+                this.logSuccess(
+                  `✅ 상품 발견: ${selector} (페이지 ${currentPage}, 스크롤 ${scrollAttempts})`
+                );
+                productFound = true;
+                break;
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+
+          if (productFound) {
+            // 상품이 보이도록 부드럽게 스크롤
+            this.logInfo('상품을 화면 중앙으로 이동시키는 중...');
+            await productElement.evaluate((el) =>
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            );
+            await this.randomWait(500, 1000); // 스크롤 완료 대기
+
+            // 상품 클릭
+            this.logInfo('상품 클릭 중...');
+            try {
+              await productElement.click();
+            } catch (clickError) {
+              this.logInfo('일반 클릭 실패 - 강제 클릭 시도...');
+              await this.page.evaluate((selector) => {
+                const element = document.querySelector(selector);
+                if (element) {
+                  element.click();
+                }
+              }, foundProductSelector);
+            }
+            this.logSuccess('상품 클릭 완료');
+            break;
+          }
+
+          // 현재 페이지 높이 확인
+          const currentHeight = await this.page.evaluate(
+            () => document.body.scrollHeight
+          );
+
+          // 부드러운 스크롤 애니메이션 (여러 단계로 나누어서)
+          const scrollAmount = 800 + Math.random() * 400; // 1200~1600px
+          const steps = 16; // 16단계로 나누어서 부드럽게
+          const stepSize = scrollAmount / steps;
+
+          for (let step = 0; step < steps; step++) {
+            await this.page.evaluate((stepSize) => {
+              window.scrollBy(0, stepSize);
+            }, stepSize);
+            await new Promise((resolve) => setTimeout(resolve, 10)); // 20ms씩 대기
+          }
+
+          // 짧은 대기 시간 (스크롤 완료 후)
+          await this.randomWait(100, 200); // 0.1~0.2초 대기
+
+          // 새로운 높이 확인
+          const newHeight = await this.page.evaluate(
+            () => document.body.scrollHeight
+          );
+
+          // 페이지 끝 도달 감지 (더 정확하게)
+          if (newHeight === previousHeight) {
+            noNewContentCount++;
+            // 연속으로 2번 높이가 같으면 페이지 끝으로 판단
+            if (noNewContentCount >= 2) {
+              this.logInfo(
+                `페이지 ${currentPage} 끝에 도달 - 상품을 찾지 못함`
               );
-              productFound = true;
               break;
             }
-          } catch (error) {
-            continue;
+          } else {
+            noNewContentCount = 0; // 새 콘텐츠가 로드되면 카운트 리셋
           }
+
+          previousHeight = newHeight;
         }
 
-        if (productFound) {
-          // 상품이 보이도록 스크롤
-          await productElement.evaluate((el) =>
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          );
-          await this.randomWait(1000, 2000);
-
-          // 5단계: 상품 클릭
-          this.logInfo('상품 클릭 중...');
-          try {
-            await productElement.click();
-          } catch (clickError) {
-            this.logInfo('일반 클릭 실패 - 강제 클릭 시도...');
-            await this.page.evaluate((selector) => {
-              const element = document.querySelector(selector);
-              if (element) {
-                element.click();
-              }
-            }, foundProductSelector);
-          }
-
-          this.logSuccess('상품 클릭 완료');
-          break;
-        } else {
+        if (!productFound) {
           // 다음 페이지로 이동
           if (currentPage < maxPages) {
             this.logInfo(
