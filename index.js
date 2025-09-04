@@ -2,6 +2,10 @@
 import dotenv from 'dotenv';
 import NaverStoreScraper from './src/core/NaverStoreScraper.js';
 import NaverSmartStoreScraper from './src/core/NaverSmartStoreScraper.js';
+import CoupangVendorScraper from './src/core/CoupangVendorScraper.js';
+import CoupangProductListScraper from './src/core/CoupangProductListScraper.js';
+import CoupangCombinedScraper from './src/core/CoupangCombinedScraper.js';
+import CoupangDataStorage from './src/core/CoupangDataStorage.js';
 
 const env = process.env.NODE_ENV || 'development';
 
@@ -38,7 +42,7 @@ async function main() {
   };
 
   try {
-    const mode = process.argv[2] || 'map'; // 'map' 또는 'smartstore'
+    const mode = process.argv[2] || 'map'; // 'map', 'smartstore', 'navershopping', 'coupang'
     const keywordOrUrl = process.argv[3] || '치킨';
     const maxResults = parseInt(process.argv[4]) || 5;
 
@@ -150,9 +154,180 @@ async function main() {
           console.error('연결 해제 중 오류:', closeError.message);
         }
       }
+    } else if (mode === 'coupang') {
+      console.log(`=== 쿠팡 데이터 수집 ===`);
+
+      // 쿠팡 요청/응답 로그 끄기
+      scraperOptions.enableLogging = false;
+
+      // 사용법: node index.js coupang vendor 39646-39650
+      // 사용법: node index.js coupang product 39646,39649 5
+      // 사용법: node index.js coupang combined 39646-39649 3
+      const subMode = process.argv[3] || 'vendor'; // 'vendor', 'product', 또는 'combined'
+      const range = process.argv[4] || '39646-39650'; // 범위 또는 ID 목록
+      const maxPages = parseInt(process.argv[5]) || 5; // 상품용 페이지 수
+      const storeId = 0; // 항상 0으로 고정
+
+      const storage = new CoupangDataStorage({ storageType: 'csv' });
+
+      if (subMode === 'vendor') {
+        console.log(`벤더 정보 수집 모드`);
+        console.log(`범위/ID: ${range}`);
+        console.log(`스토어 ID: ${storeId}`);
+
+        const vendorScraper = new CoupangVendorScraper(scraperOptions);
+        let results;
+
+        if (range.includes('-')) {
+          // 범위로 수집
+          const [start, end] = range.split('-').map(Number);
+          results = await vendorScraper.collectVendorData(start, end, storeId);
+        } else if (range.includes(',')) {
+          // 특정 ID들로 수집
+          const vendorIds = range
+            .split(',')
+            .map((id) => `A${String(id.trim()).padStart(8, '0')}`);
+          results = await vendorScraper.collectVendorDataByIds(
+            vendorIds,
+            storeId
+          );
+        } else {
+          // 단일 ID
+          const vendorId = `A${String(range).padStart(8, '0')}`;
+          const result = await vendorScraper.getVendorInfo(storeId, vendorId);
+          results = [result];
+        }
+
+        await storage.save(
+          results,
+          'vendor',
+          `coupang_vendors_${range}_${Date.now()}`
+        );
+      } else if (subMode === 'product') {
+        console.log(`상품 리스트 수집 모드`);
+        console.log(`범위/ID: ${range}`);
+        console.log(`스토어 ID: ${storeId}`);
+
+        const productScraper = new CoupangProductListScraper(scraperOptions);
+        let results;
+
+        if (range.includes('-')) {
+          // 범위로 수집
+          const [start, end] = range.split('-').map(Number);
+          results = await productScraper.collectProductsByVendorRange(
+            start,
+            end,
+            storeId,
+            maxPages
+          );
+        } else if (range.includes(',')) {
+          // 특정 ID들로 수집
+          const vendorIds = range.split(',').map((id) => {
+            let vendorId = String(id.trim());
+            if (!vendorId.startsWith('A')) {
+              vendorId = `A${vendorId.padStart(8, '0')}`;
+            }
+            return vendorId;
+          });
+          results = await productScraper.collectProductsByVendorIds(
+            vendorIds,
+            storeId,
+            maxPages
+          );
+        } else {
+          // 단일 ID
+          let vendorId = String(range);
+          if (!vendorId.startsWith('A')) {
+            vendorId = `A${vendorId.padStart(8, '0')}`;
+          }
+          const result = await productScraper.getAllProducts(
+            vendorId,
+            storeId,
+            maxPages
+          );
+          results = [result];
+        }
+
+        await storage.save(
+          results,
+          'product',
+          `coupang_products_${range}_${Date.now()}`
+        );
+      } else if (subMode === 'combined') {
+        console.log(`벤더+상품 통합 수집 모드`);
+        console.log(`범위/ID: ${range}`);
+        console.log(`스토어 ID: ${storeId}`);
+        console.log(`상품수 (벤더당): ${maxPages}`);
+
+        const combinedScraper = new CoupangCombinedScraper(scraperOptions);
+        let results;
+
+        if (range.includes('-')) {
+          // 범위로 수집
+          const [start, end] = range.split('-').map(Number);
+          results = await combinedScraper.collectCombinedByRange(
+            start,
+            end,
+            storeId,
+            maxPages
+          );
+        } else if (range.includes(',')) {
+          // 특정 ID들로 수집
+          const vendorIds = range.split(',').map((id) => {
+            let vendorId = String(id.trim());
+            if (!vendorId.startsWith('A')) {
+              vendorId = `A${vendorId.padStart(8, '0')}`;
+            }
+            return vendorId;
+          });
+          results = await combinedScraper.collectCombinedData(
+            vendorIds,
+            storeId,
+            maxPages
+          );
+        } else {
+          // 단일 ID
+          let vendorId = String(range);
+          if (!vendorId.startsWith('A')) {
+            vendorId = `A${vendorId.padStart(8, '0')}`;
+          }
+          results = await combinedScraper.collectCombinedData(
+            [vendorId],
+            storeId,
+            maxPages
+          );
+        }
+
+        await storage.save(
+          results,
+          'combined',
+          `coupang_combined_${range}_${Date.now()}`
+        );
+      } else {
+        console.log(
+          '❌ 지원되지 않는 서브모드입니다. "vendor", "product", "combined"를 사용하세요.'
+        );
+        console.log('📖 쿠팡 사용법:');
+        console.log('  • 벤더 정보: node index.js coupang vendor 39646-39650');
+        console.log(
+          '  • 벤더 정보 (특정): node index.js coupang vendor 39646,39649'
+        );
+        console.log(
+          '  • 상품 리스트: node index.js coupang product 39646-39650 5'
+        );
+        console.log(
+          '  • 상품 리스트 (특정): node index.js coupang product 39646,39649 3'
+        );
+        console.log(
+          '  • 통합 수집: node index.js coupang combined 1039646-1039649 2'
+        );
+        console.log(
+          '  • 통합 수집 (특정): node index.js coupang combined 1039646,1039649 3'
+        );
+      }
     } else {
       console.log(
-        '❌ 지원되지 않는 모드입니다. "map", "smartstore", "navershopping"을 사용하세요.'
+        '❌ 지원되지 않는 모드입니다. "map", "smartstore", "navershopping", "coupang"을 사용하세요.'
       );
       console.log('📖 사용법:');
       console.log('  • 지도 검색: node index.js map "키워드" [결과수]');
@@ -160,11 +335,22 @@ async function main() {
       console.log(
         '  • 쇼핑 상품 클릭: node index.js navershopping "카탈로그URL"'
       );
+      console.log('  • 쿠팡 벤더: node index.js coupang vendor "39646-39650"');
+      console.log(
+        '  • 쿠팡 상품: node index.js coupang product "39646,39649" [페이지수]'
+      );
+      console.log(
+        '  • 쿠팡 통합: node index.js coupang combined "1039646-1039649" [상품수]'
+      );
       console.log('');
       console.log('📄 네이버 쇼핑 예시:');
       console.log(
         '  node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?query=의자"'
       );
+      console.log('');
+      console.log('📄 쿠팡 예시:');
+      console.log('  node index.js coupang vendor 39646-39650');
+      console.log('  node index.js coupang product 39646,39649 5');
     }
   } catch (error) {
     console.error('프로그램 실행 중 오류 발생:', error.message);
