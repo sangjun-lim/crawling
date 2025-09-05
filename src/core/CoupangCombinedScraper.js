@@ -15,7 +15,7 @@ class CoupangCombinedScraper {
     this.storage = new CoupangDataStorage(options);
 
     // Rate limiting: 벤더당 2번 요청이므로 200ms 간격 (300 requests per minute)
-    this.rateLimitDelay = 200; // milliseconds
+    this.rateLimitDelay = 150; // milliseconds
     this.lastRequestTime = 0;
 
     // 배치 설정
@@ -54,6 +54,17 @@ class CoupangCombinedScraper {
       };
 
       const response = await this.httpClient.get(url, {}, headers);
+
+      // Rate limit 정보만 한 줄로 출력
+      const rateLimitInfo = {
+        remaining: response.headers['x-ratelimit-remaining'] || 'N/A',
+        requested: response.headers['x-ratelimit-requested-tokens'] || 'N/A',
+        burst: response.headers['x-ratelimit-burst-capacity'] || 'N/A',
+        replenish: response.headers['x-ratelimit-replenish-rate'] || 'N/A',
+      };
+      console.log(
+        `🚦 Rate Limit (${vendorId}): remaining=${rateLimitInfo.remaining}, requested=${rateLimitInfo.requested}, burst=${rateLimitInfo.burst}, replenish=${rateLimitInfo.replenish}`
+      );
 
       return {
         success: true,
@@ -130,7 +141,7 @@ class CoupangCombinedScraper {
     }
   }
 
-  async getAllProducts(vendorId, storeId = 0, maxProducts = 10000000) {
+  async getAllProducts(vendorId, storeId = 0, maxProducts = 5) {
     const allProducts = [];
     let nextPageKey = 0;
     let currentPage = 1;
@@ -245,19 +256,35 @@ class CoupangCombinedScraper {
       } else {
         console.log(`✅ 상품 수집 성공: ${vendorId} - ${products.length}개`);
 
-        // 3. 벤더 정보와 상품 정보 결합 (상품 개수만큼 벤더 정보 중복)
-        products.forEach((product) => {
-          results.push({
-            ...vendorData, // 벤더 정보 전체
-            vendorId,
-            storeId: vendorResult.storeId,
-            수집시간: vendorResult.timestamp,
-            상품명: product.imageAndTitleArea?.title || '',
-            상품링크: product.link || '',
-            상품ID: product.productId || '',
-            상품수집시간: product.collectedAt || '',
-          });
+        // 3. 벤더 정보와 상품 정보 결합 (한 행에 모든 상품 저장)
+        const vendorWithProducts = {
+          ...vendorData, // 벤더 정보 전체
+          vendorId,
+          storeId: vendorResult.storeId,
+          수집시간: vendorResult.timestamp,
+        };
+
+        // 상품 정보를 horizontal하게 추가
+        let productCollectedTime = '';
+        products.forEach((product, index) => {
+          const productNum = index + 1;
+          vendorWithProducts[`상품명${productNum}`] =
+            product.imageAndTitleArea?.title || '';
+          vendorWithProducts[`상품링크${productNum}`] = product.link || '';
+          vendorWithProducts[`상품ID${productNum}`] = product.productId || '';
+
+          // 첫 번째 상품의 수집시간을 공통으로 사용
+          if (index === 0) {
+            productCollectedTime = product.collectedAt || '';
+          }
         });
+
+        // 상품수집시간을 하나로 통일
+        if (productCollectedTime) {
+          vendorWithProducts['상품수집시간'] = productCollectedTime;
+        }
+
+        results.push(vendorWithProducts);
       }
     }
 
@@ -366,35 +393,43 @@ class CoupangCombinedScraper {
           );
 
           // 3. 데이터 결합
+          const vendorWithProducts = {
+            ...vendorData,
+            vendorId,
+            storeId: vendorResult.storeId,
+            수집시간: vendorResult.timestamp,
+          };
+
           if (products.length === 0) {
             console.log(`⚠️  상품 없음: ${vendorId} - 벤더 정보만 저장`);
-            currentBatch.push({
-              ...vendorData,
-              vendorId,
-              storeId: vendorResult.storeId,
-              수집시간: vendorResult.timestamp,
-              상품명: '',
-              상품링크: '',
-              상품ID: '',
-              상품수집시간: '',
-            });
+            // 상품이 없는 경우 빈 상품 필드들 추가하지 않음
           } else {
             console.log(
               `✅ 상품 수집 성공: ${vendorId} - ${products.length}개`
             );
-            products.forEach((product) => {
-              currentBatch.push({
-                ...vendorData,
-                vendorId,
-                storeId: vendorResult.storeId,
-                수집시간: vendorResult.timestamp,
-                상품명: product.imageAndTitleArea?.title || '',
-                상품링크: product.link || '',
-                상품ID: product.productId || '',
-                상품수집시간: product.collectedAt || '',
-              });
+            // 상품 정보를 horizontal하게 추가
+            let productCollectedTime = '';
+            products.forEach((product, index) => {
+              const productNum = index + 1;
+              vendorWithProducts[`상품명${productNum}`] =
+                product.imageAndTitleArea?.title || '';
+              vendorWithProducts[`상품링크${productNum}`] = product.link || '';
+              vendorWithProducts[`상품ID${productNum}`] =
+                product.productId || '';
+
+              // 첫 번째 상품의 수집시간을 공통으로 사용
+              if (index === 0) {
+                productCollectedTime = product.collectedAt || '';
+              }
             });
+
+            // 상품수집시간을 하나로 통일
+            if (productCollectedTime) {
+              vendorWithProducts['상품수집시간'] = productCollectedTime;
+            }
           }
+
+          currentBatch.push(vendorWithProducts);
 
           checkpoint.processedVendors.push({
             vendorId,
@@ -447,8 +482,14 @@ class CoupangCombinedScraper {
 
       // 마지막 배치 저장 (남은 데이터가 있으면)
       if (currentBatch.length > 0 && this.autoSave) {
-        await this.storage.saveIncrementalBatch(currentBatch, batchIndex, sessionId);
-        console.log(`📦 마지막 배치 ${batchIndex} 저장 완료: ${currentBatch.length}행`);
+        await this.storage.saveIncrementalBatch(
+          currentBatch,
+          batchIndex,
+          sessionId
+        );
+        console.log(
+          `📦 마지막 배치 ${batchIndex} 저장 완료: ${currentBatch.length}행`
+        );
         batchIndex++;
       }
 
@@ -457,11 +498,19 @@ class CoupangCombinedScraper {
       checkpoint.currentBatch = batchIndex;
       checkpoint.status = 'completed';
       checkpoint.endTime = new Date().toISOString();
-      this.checkpointManager.updateProgress(checkpoint, currentPosition, batchIndex);
+      this.checkpointManager.updateProgress(
+        checkpoint,
+        currentPosition,
+        batchIndex
+      );
       await this.checkpointManager.saveCheckpoint(sessionId, checkpoint);
-      
-      const finalProgress = Math.floor((currentPosition / vendorIds.length) * 100);
-      console.log(`💾 최종 진행률: ${currentPosition}/${vendorIds.length} (${finalProgress}%)`);   
+
+      const finalProgress = Math.floor(
+        (currentPosition / vendorIds.length) * 100
+      );
+      console.log(
+        `💾 최종 진행률: ${currentPosition}/${vendorIds.length} (${finalProgress}%)`
+      );
 
       console.log(`\n✅ 안전 수집 완료!`);
       console.log(`   세션 ID: ${sessionId}`);

@@ -232,54 +232,78 @@ class CoupangDataStorage {
         
         const filePath = path.join(this.outputDir, `${filename}.csv`);
         
-        // 통합 CSV 헤더와 데이터 매핑 (벤더 정보 + 상품 정보)
-        const csvData = results.map(row => ({
-            수집시간: row.수집시간 || '',
-            벤더ID: row.vendorId || '',
-            벤더명: row.name || '',
-            평점수: row.ratingCount || 0,
-            좋아요수: row.thumbUpCount || 0,
-            싫어요수: row.thumbDownCount || 0,
-            좋아요비율: row.thumbUpRatio || 0,
-            대표주소1: row.repAddr1 || '',
-            대표주소2: row.repAddr2 || '',
-            대표이메일: row.repEmail || '',
-            대표자명: row.repPersonName || '',
-            대표전화: row.repPhoneNum || '',
-            사업자번호: row.businessNumber || '',
-            리뷰상세링크: row.sellerReviewDetailLink || '',
-            품질배지: row.qualitySellerBadgeDto ? JSON.stringify(row.qualitySellerBadgeDto) : '',
-            상품수집시간: row.상품수집시간 || '',
-            상품명: row.상품명 || '',
-            상품링크: row.상품링크 || '',
-            상품ID: row.상품ID || '',
-            전체응답: JSON.stringify(row)
-        }));
+        // 고정 상품 개수 (최대 5개)
+        const maxProducts = 5;
+
+        // 동적 헤더 생성
+        const baseHeaders = [
+            { id: '수집시간', title: '수집시간' },
+            { id: '벤더ID', title: '벤더ID' },
+            { id: '벤더명', title: '벤더명' },
+            { id: '평점수', title: '평점수' },
+            { id: '좋아요수', title: '좋아요수' },
+            { id: '싫어요수', title: '싫어요수' },
+            { id: '좋아요비율', title: '좋아요비율' },
+            { id: '대표주소1', title: '대표주소1' },
+            { id: '대표주소2', title: '대표주소2' },
+            { id: '대표이메일', title: '대표이메일' },
+            { id: '대표자명', title: '대표자명' },
+            { id: '대표전화', title: '대표전화' },
+            { id: '사업자번호', title: '사업자번호' },
+            { id: '리뷰상세링크', title: '리뷰상세링크' },
+            { id: '품질배지', title: '품질배지' }
+        ];
+
+        // 상품 헤더 추가 (상품수집시간은 하나로 통일)
+        const productHeaders = [];
+        for (let i = 1; i <= maxProducts; i++) {
+            productHeaders.push(
+                { id: `상품명${i}`, title: `상품명${i}` },
+                { id: `상품링크${i}`, title: `상품링크${i}` },
+                { id: `상품ID${i}`, title: `상품ID${i}` }
+            );
+        }
+        productHeaders.push({ id: '상품수집시간', title: '상품수집시간' });
+
+        const headers = [...baseHeaders, ...productHeaders, { id: '전체응답', title: '전체응답' }];
+
+        // CSV 데이터 매핑
+        const csvData = results.map(row => {
+            const baseData = {
+                수집시간: row.수집시간 || '',
+                벤더ID: row.vendorId || '',
+                벤더명: row.name || '',
+                평점수: row.ratingCount || 0,
+                좋아요수: row.thumbUpCount || 0,
+                싫어요수: row.thumbDownCount || 0,
+                좋아요비율: row.thumbUpRatio || 0,
+                대표주소1: row.repAddr1 || '',
+                대표주소2: row.repAddr2 || '',
+                대표이메일: row.repEmail || '',
+                대표자명: row.repPersonName || '',
+                대표전화: row.repPhoneNum || '',
+                사업자번호: row.businessNumber || '',
+                리뷰상세링크: row.sellerReviewDetailLink || '',
+                품질배지: row.qualitySellerBadgeDto ? JSON.stringify(row.qualitySellerBadgeDto) : '',
+                전체응답: JSON.stringify(row)
+            };
+
+            // 상품 데이터 매핑
+            for (let i = 1; i <= maxProducts; i++) {
+                baseData[`상품명${i}`] = row[`상품명${i}`] || '';
+                baseData[`상품링크${i}`] = row[`상품링크${i}`] || '';
+                baseData[`상품ID${i}`] = row[`상품ID${i}`] || '';
+            }
+            
+            // 상품수집시간은 첫 번째 상품의 시간 사용 (모두 동일)
+            baseData['상품수집시간'] = row['상품수집시간1'] || '';
+
+            return baseData;
+        });
 
         const csvWriter = createObjectCsvWriter({
             path: filePath,
-            header: [
-                { id: '수집시간', title: '수집시간' },
-                { id: '벤더ID', title: '벤더ID' },
-                { id: '벤더명', title: '벤더명' },
-                { id: '평점수', title: '평점수' },
-                { id: '좋아요수', title: '좋아요수' },
-                { id: '싫어요수', title: '싫어요수' },
-                { id: '좋아요비율', title: '좋아요비율' },
-                { id: '대표주소1', title: '대표주소1' },
-                { id: '대표주소2', title: '대표주소2' },
-                { id: '대표이메일', title: '대표이메일' },
-                { id: '대표자명', title: '대표자명' },
-                { id: '대표전화', title: '대표전화' },
-                { id: '사업자번호', title: '사업자번호' },
-                { id: '리뷰상세링크', title: '리뷰상세링크' },
-                { id: '품질배지', title: '품질배지' },
-                { id: '상품수집시간', title: '상품수집시간' },
-                { id: '상품명', title: '상품명' },
-                { id: '상품링크', title: '상품링크' },
-                { id: '상품ID', title: '상품ID' },
-                { id: '전체응답', title: '전체응답' }
-            ],
+            header: headers,
             encoding: 'utf8'
         });
 

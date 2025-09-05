@@ -313,7 +313,7 @@ async function main() {
         console.log(`상품수 (벤더당): ${maxPages}`);
 
         // 프록시 설정
-        scraperOptions.proxies = ['http://172.30.1.55:9090'];
+        // scraperOptions.proxies = ['http://172.30.1.55:9090'];
 
         const combinedScraper = new CoupangCombinedScraper({
           ...scraperOptions,
