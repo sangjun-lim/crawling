@@ -1,5 +1,7 @@
 import HttpClient from './HttpClient.js';
 import LogUtils from '../utils/LogUtils.js';
+import CheckpointManager from './CheckpointManager.js';
+import CoupangDataStorage from './CoupangDataStorage.js';
 
 class CoupangCombinedScraper {
   constructor(options = {}) {
@@ -9,10 +11,16 @@ class CoupangCombinedScraper {
       ...options,
     });
     this.logUtils = new LogUtils(options);
+    this.checkpointManager = new CheckpointManager(options);
+    this.storage = new CoupangDataStorage(options);
 
     // Rate limiting: 벤더당 2번 요청이므로 200ms 간격 (300 requests per minute)
     this.rateLimitDelay = 200; // milliseconds
     this.lastRequestTime = 0;
+
+    // 배치 설정
+    this.batchSize = options.batchSize || 100;
+    this.autoSave = options.autoSave !== false; // 기본값: true
   }
 
   async waitForRateLimit() {
@@ -183,7 +191,7 @@ class CoupangCombinedScraper {
     const results = [];
 
     console.log(`쿠팡 통합 데이터 수집 시작: ${vendorIds.length}개 벤더`);
-    
+
     // 프록시 통계 초기화 로깅
     if (this.httpClient.proxies.length > 0) {
       console.log(`📡 프록시 ${this.httpClient.proxies.length}개 사용 중`);
@@ -254,13 +262,274 @@ class CoupangCombinedScraper {
     }
 
     console.log(`\n통합 데이터 수집 완료: 총 ${results.length}행`);
-    
+
     // 프록시 통계 출력
     if (this.httpClient.proxies.length > 0) {
       this.httpClient.logProxyStats();
     }
-    
+
     return results;
+  }
+
+  // 안전한 대량 수집 (배치 + 체크포인트)
+  async collectCombinedSafe(
+    vendorIds,
+    storeId = 0,
+    maxProductsPerVendor = 5,
+    options = {}
+  ) {
+    const sessionId =
+      options.resumeSessionId || this.checkpointManager.generateSessionId();
+    let checkpoint;
+
+    try {
+      // 기존 체크포인트 로드 또는 새로 생성
+      if (options.resumeSessionId) {
+        checkpoint = await this.checkpointManager.loadCheckpoint(sessionId);
+        if (!checkpoint) {
+          throw new Error(`체크포인트를 찾을 수 없습니다: ${sessionId}`);
+        }
+        console.log(`🔄 세션 재개: ${sessionId}`);
+      } else {
+        checkpoint = this.checkpointManager.createCheckpoint(
+          sessionId,
+          vendorIds,
+          {
+            batchSize: this.batchSize,
+            maxProductsPerVendor,
+            storeId,
+            ...options,
+          }
+        );
+        await this.checkpointManager.saveCheckpoint(sessionId, checkpoint);
+        console.log(`🚀 새 세션 시작: ${sessionId}`);
+      }
+
+      console.log(
+        `쿠팡 안전 수집 시작: ${vendorIds.length}개 벤더 (배치 크기: ${this.batchSize})`
+      );
+
+      // 이미 처리된 벤더들 스킵
+      const remainingVendors = vendorIds.slice(checkpoint.currentIndex);
+      let currentBatch = [];
+      let batchIndex = checkpoint.currentBatch;
+      let processedInSession = 0;
+      let currentPosition = checkpoint.currentIndex; // 전체 진행률용
+
+      for (let i = 0; i < remainingVendors.length; i++) {
+        const vendorId = remainingVendors[i];
+        currentPosition++; // 각 벤더 처리 시작할 때 증가
+
+        console.log(
+          `\n=== [${i + 1}/${remainingVendors.length}] 처리 중: ${vendorId} ===`
+        );
+
+        try {
+          // 1. 벤더 정보 수집
+          const vendorResult = await this.getVendorInfo(storeId, vendorId);
+
+          if (!vendorResult.success) {
+            console.log(
+              `❌ 벤더 정보 실패: ${vendorId} - ${vendorResult.error}`
+            );
+            checkpoint.processedVendors.push({
+              vendorId,
+              status: 'vendor_failed',
+              error: vendorResult.error,
+            });
+            continue;
+          }
+
+          // 벤더 데이터 유효성 검사
+          const vendorData = vendorResult.data;
+          if (
+            !vendorData ||
+            vendorData.name === null ||
+            !vendorData.vendorId ||
+            vendorData.vendorId.trim() === ''
+          ) {
+            console.log(`❌ 벤더 데이터 유효하지 않음: ${vendorId}`);
+            checkpoint.processedVendors.push({
+              vendorId,
+              status: 'invalid_data',
+            });
+            continue;
+          }
+
+          console.log(`✅ 벤더 정보 성공: ${vendorId} - ${vendorData.name}`);
+
+          // 2. 상품 정보 수집
+          const products = await this.getAllProducts(
+            vendorId,
+            storeId,
+            maxProductsPerVendor
+          );
+
+          // 3. 데이터 결합
+          if (products.length === 0) {
+            console.log(`⚠️  상품 없음: ${vendorId} - 벤더 정보만 저장`);
+            currentBatch.push({
+              ...vendorData,
+              vendorId,
+              storeId: vendorResult.storeId,
+              수집시간: vendorResult.timestamp,
+              상품명: '',
+              상품링크: '',
+              상품ID: '',
+              상품수집시간: '',
+            });
+          } else {
+            console.log(
+              `✅ 상품 수집 성공: ${vendorId} - ${products.length}개`
+            );
+            products.forEach((product) => {
+              currentBatch.push({
+                ...vendorData,
+                vendorId,
+                storeId: vendorResult.storeId,
+                수집시간: vendorResult.timestamp,
+                상품명: product.imageAndTitleArea?.title || '',
+                상품링크: product.link || '',
+                상품ID: product.productId || '',
+                상품수집시간: product.collectedAt || '',
+              });
+            });
+          }
+
+          checkpoint.processedVendors.push({
+            vendorId,
+            status: 'success',
+            productCount: products.length,
+          });
+          processedInSession++;
+        } catch (error) {
+          console.error(`💥 벤더 처리 오류 (${vendorId}):`, error.message);
+          checkpoint.processedVendors.push({
+            vendorId,
+            status: 'error',
+            error: error.message,
+          });
+        }
+
+        // 배치 저장 (배치 크기 도달시)
+        if (currentBatch.length >= this.batchSize) {
+          if (currentBatch.length > 0 && this.autoSave) {
+            await this.storage.saveIncrementalBatch(
+              currentBatch,
+              batchIndex,
+              sessionId
+            );
+            console.log(
+              `📦 배치 ${batchIndex} 저장 완료: ${currentBatch.length}행`
+            );
+            currentBatch = [];
+            batchIndex++;
+          }
+
+          // 배치 저장 시에만 체크포인트 업데이트
+          checkpoint.currentIndex = currentPosition;
+          checkpoint.currentBatch = batchIndex;
+          this.checkpointManager.updateProgress(
+            checkpoint,
+            currentPosition,
+            batchIndex
+          );
+          await this.checkpointManager.saveCheckpoint(sessionId, checkpoint);
+
+          const progress = Math.floor(
+            (currentPosition / vendorIds.length) * 100
+          );
+          console.log(
+            `💾 진행률: ${currentPosition}/${vendorIds.length} (${progress}%)`
+          );
+        }
+      }
+
+      // 마지막 배치 저장 (남은 데이터가 있으면)
+      if (currentBatch.length > 0 && this.autoSave) {
+        await this.storage.saveIncrementalBatch(currentBatch, batchIndex, sessionId);
+        console.log(`📦 마지막 배치 ${batchIndex} 저장 완료: ${currentBatch.length}행`);
+        batchIndex++;
+      }
+
+      // 완료 처리 - 최종 진행률 업데이트
+      checkpoint.currentIndex = currentPosition;
+      checkpoint.currentBatch = batchIndex;
+      checkpoint.status = 'completed';
+      checkpoint.endTime = new Date().toISOString();
+      this.checkpointManager.updateProgress(checkpoint, currentPosition, batchIndex);
+      await this.checkpointManager.saveCheckpoint(sessionId, checkpoint);
+      
+      const finalProgress = Math.floor((currentPosition / vendorIds.length) * 100);
+      console.log(`💾 최종 진행률: ${currentPosition}/${vendorIds.length} (${finalProgress}%)`);   
+
+      console.log(`\n✅ 안전 수집 완료!`);
+      console.log(`   세션 ID: ${sessionId}`);
+      console.log(`   처리된 벤더: ${processedInSession}개`);
+      console.log(`   저장된 배치: ${batchIndex}개`);
+
+      // 프록시 통계 출력
+      if (this.httpClient.proxies.length > 0) {
+        this.httpClient.logProxyStats();
+      }
+
+      return {
+        sessionId,
+        checkpoint,
+        batchCount: batchIndex,
+        processedVendors: processedInSession,
+      };
+    } catch (error) {
+      console.error('💥 안전 수집 중 치명적 오류:', error.message);
+
+      // 오류 체크포인트 저장
+      if (checkpoint) {
+        checkpoint.status = 'error';
+        checkpoint.error = error.message;
+        checkpoint.errorTime = new Date().toISOString();
+        await this.checkpointManager.saveCheckpoint(sessionId, checkpoint);
+      }
+
+      throw error;
+    }
+  }
+
+  // 세션 재개
+  async resumeSession(sessionId, options = {}) {
+    console.log(`🔄 세션 재개: ${sessionId}`);
+    return await this.collectCombinedSafe([], 0, 5, {
+      ...options,
+      resumeSessionId: sessionId,
+    });
+  }
+
+  // 세션 완료 (배치 병합)
+  async completeSession(sessionId, options = {}) {
+    console.log(`🔗 세션 완료 처리: ${sessionId}`);
+
+    try {
+      // 배치 병합
+      const mergedFile = await this.storage.mergeBatches(
+        sessionId,
+        options.finalFilename
+      );
+
+      // 배치 파일 정리 (옵션)
+      if (options.cleanupBatches !== false) {
+        await this.storage.cleanupBatches(sessionId, false);
+      }
+
+      // 체크포인트 정리 (옵션)
+      if (options.cleanupCheckpoint !== false) {
+        await this.checkpointManager.deleteCheckpoint(sessionId);
+      }
+
+      console.log(`✅ 세션 완료: ${mergedFile}`);
+      return mergedFile;
+    } catch (error) {
+      console.error('세션 완료 처리 실패:', error.message);
+      throw error;
+    }
   }
 
   async collectCombinedByRange(
@@ -284,6 +553,33 @@ class CoupangCombinedScraper {
       vendorIds,
       storeId,
       maxProductsPerVendor
+    );
+  }
+
+  // 안전한 범위 수집
+  async collectCombinedByRangeSafe(
+    startVendorId = 1,
+    endVendorId = 100,
+    storeId = 0,
+    maxProductsPerVendor = 5,
+    options = {}
+  ) {
+    const vendorIds = [];
+
+    for (
+      let vendorIdNum = startVendorId;
+      vendorIdNum <= endVendorId;
+      vendorIdNum++
+    ) {
+      const vendorId = `A${String(vendorIdNum).padStart(8, '0')}`;
+      vendorIds.push(vendorId);
+    }
+
+    return await this.collectCombinedSafe(
+      vendorIds,
+      storeId,
+      maxProductsPerVendor,
+      options
     );
   }
 }

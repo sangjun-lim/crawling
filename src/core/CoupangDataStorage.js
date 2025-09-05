@@ -308,6 +308,103 @@ class CoupangDataStorage {
         return await this.saveCombinedAsJSON(results, 'combined_temp');
     }
 
+    // 점진적 저장 (배치)
+    async saveIncrementalBatch(results, batchIndex, sessionId, type = 'combined') {
+        if (results.length === 0) {
+            console.log(`배치 ${batchIndex}: 저장할 데이터가 없습니다.`);
+            return null;
+        }
+
+        const batchFilename = `${sessionId}_batch_${String(batchIndex).padStart(6, '0')}`;
+        
+        // 배치 폴더 생성
+        const batchDir = path.join(this.outputDir, 'batches', sessionId);
+        await fs.mkdir(batchDir, { recursive: true });
+        
+        let filePath;
+        if (type === 'combined') {
+            filePath = await this.saveCombinedAsCSV(results, batchFilename);
+            // 배치 폴더로 이동
+            const batchFilePath = path.join(batchDir, `${batchFilename}.csv`);
+            await fs.rename(filePath, batchFilePath);
+            filePath = batchFilePath;
+        }
+
+        console.log(`✅ 배치 ${batchIndex} 저장: ${results.length}행 → ${filePath}`);
+        return filePath;
+    }
+
+    // 최종 병합
+    async mergeBatches(sessionId, finalFilename = null) {
+        const batchDir = path.join(this.outputDir, 'batches', sessionId);
+        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        const mergedFilename = finalFilename || `coupang_combined_merged_${timestamp}`;
+        const finalFilePath = path.join(this.outputDir, `${mergedFilename}.csv`);
+
+        try {
+            // 배치 파일들 찾기
+            const batchFiles = await fs.readdir(batchDir);
+            const csvFiles = batchFiles.filter(f => f.endsWith('.csv')).sort();
+            
+            if (csvFiles.length === 0) {
+                console.log('병합할 배치 파일이 없습니다.');
+                return null;
+            }
+
+            console.log(`📁 ${csvFiles.length}개 배치 파일 병합 중...`);
+
+            let isFirstFile = true;
+            let totalRows = 0;
+            const writeStream = (await import('fs')).createWriteStream(finalFilePath);
+
+            for (const csvFile of csvFiles) {
+                const batchFilePath = path.join(batchDir, csvFile);
+                const content = await fs.readFile(batchFilePath, 'utf8');
+                const lines = content.trim().split('\n');
+
+                if (isFirstFile) {
+                    // 첫 파일은 헤더 포함해서 전체 복사
+                    writeStream.write(content + '\n');
+                    totalRows += lines.length - 1; // 헤더 제외
+                    isFirstFile = false;
+                } else {
+                    // 나머지 파일은 헤더 제외하고 복사
+                    const dataLines = lines.slice(1);
+                    if (dataLines.length > 0) {
+                        writeStream.write(dataLines.join('\n') + '\n');
+                        totalRows += dataLines.length;
+                    }
+                }
+            }
+
+            writeStream.end();
+
+            console.log(`✅ 배치 병합 완료: ${finalFilePath}`);
+            console.log(`   총 ${totalRows}행, ${csvFiles.length}개 배치에서 병합`);
+
+            return finalFilePath;
+        } catch (error) {
+            console.error('배치 병합 실패:', error.message);
+            throw error;
+        }
+    }
+
+    // 배치 폴더 정리
+    async cleanupBatches(sessionId, keepBatches = false) {
+        if (keepBatches) {
+            console.log('배치 파일 보관됨');
+            return;
+        }
+
+        const batchDir = path.join(this.outputDir, 'batches', sessionId);
+        try {
+            await fs.rm(batchDir, { recursive: true, force: true });
+            console.log('🗑️  배치 파일 정리 완료');
+        } catch (error) {
+            console.warn('배치 파일 정리 실패:', error.message);
+        }
+    }
+
     // 통합 저장 메서드
     async save(data, type, filename = null) {
         if (type === 'vendor') {

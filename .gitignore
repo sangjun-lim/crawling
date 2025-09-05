@@ -21,6 +21,7 @@ logs/
 temp/
 tmp/
 *.tmp
+checkpoints/
 
 # 백업 파일들
 *.bak
