@@ -33,7 +33,7 @@ class NaverStoreScraper {
 
     this.httpClient = new HttpClient({
       ...options,
-      proxy: this.getHttpProxyConfig(), // 프록시 설정 전달
+      proxy: this.proxyService.getHttpConfig(), // 프록시 설정 전달
     });
     this.categoryDetector = new CategoryDetector();
     this.graphQLBuilder = new GraphQLBuilder();

@@ -1,11 +1,11 @@
 // 환경별 .env 파일 로딩
 import dotenv from 'dotenv';
-import NaverStoreScraper from './src/core/NaverStoreScraper.js';
-import NaverSmartStoreScraper from './src/core/NaverSmartStoreScraper.js';
-import CoupangVendorScraper from './src/core/CoupangVendorScraper.js';
-import CoupangProductListScraper from './src/core/CoupangProductListScraper.js';
-import CoupangCombinedScraper from './src/core/CoupangCombinedScraper.js';
-import CoupangDataStorage from './src/core/CoupangDataStorage.js';
+import NaverStoreScraper from './src/scrapers/naver/naverStoreScraper.js';
+import NaverSmartStoreScraper from './src/scrapers/naver/naverSmartStoreScraper.js';
+import CoupangVendorScraper from './src/scrapers/coupang/vendorScraper.js';
+import CoupangProductListScraper from './src/scrapers/coupang/productListScraper.js';
+import CoupangCombinedScraper from './src/scrapers/coupang/combinedScraper.js';
+import CoupangDataStorage from './src/services/coupangDataStorage.js';
 
 const env = process.env.NODE_ENV || 'development';
 
@@ -465,7 +465,7 @@ async function main() {
 // ES 모듈에서 직접 실행 확인
 import { fileURLToPath } from 'url';
 import path from 'path';
-import NaverShoppingRealBrowserScraper from './src/core/NaverShoppingRealBrowserScraper.js';
+import NaverShoppingRealBrowserScraper from './src/scrapers/naver/naverShoppingBrowserScraper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
