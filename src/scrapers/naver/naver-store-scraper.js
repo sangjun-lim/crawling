@@ -1,7 +1,7 @@
 import HttpClient from '../../clients/http-client.js';
 import NaverLocationService from '../../services/naver-location-service.js';
 import GraphqlBuilder from '../../graphql/graphql-builder.js';
-import ResponseParser from '../../parsers/response-parser.js';
+import NaverStoreResponseParser from '../../parsers/response-parser.js';
 import StorageService from '../../services/storage-service.js';
 import LoggerService from '../../services/logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
@@ -41,7 +41,7 @@ class NaverStoreScraper {
     });
     this.naverLocationService = new NaverLocationService();
     this.graphQLBuilder = new GraphqlBuilder();
-    this.responseParser = new ResponseParser();
+    this.responseParser = new NaverStoreResponseParser();
   }
 
   async searchStores(keyword, maxResults = null) {

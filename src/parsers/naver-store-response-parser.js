@@ -1,6 +1,6 @@
 import StorageService from '../services/storage-service.js';
 
-class ResponseParser {
+class NaverStoreResponseParser {
   parseStoresFromGraphQLResponse(responseData, page = 1) {
     try {
       const allStores = [];
@@ -53,4 +53,4 @@ class ResponseParser {
   }
 }
 
-export default ResponseParser;
+export default NaverStoreResponseParser;
