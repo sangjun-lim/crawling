@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
-import LogUtils from '../utils/LogUtils.js';
+import LoggerService from '../services/loggerService.js';
 import { HTTP_HEADERS, DEFAULT_OPTIONS } from '../config/constants.js';
 
 class HttpClient {
@@ -13,7 +13,7 @@ class HttpClient {
       ...options
     };
     
-    this.logUtils = new LogUtils(options);
+    this.logger = new LoggerService(options);
     
     // 프록시 로테이션 설정
     this.proxies = options.proxies || [];
@@ -109,11 +109,11 @@ class HttpClient {
           }
         }
 
-        this.logUtils.logRequest(config);
+        this.logger.logRequest(config);
         return config;
       },
       error => {
-        this.logUtils.logError(error, 'request_error');
+        this.logger.logError(error, 'request_error');
         return Promise.reject(error);
       }
     );
@@ -125,7 +125,7 @@ class HttpClient {
           this.updateProxyStats(response.config.proxyUrl, true);
         }
 
-        this.logUtils.logResponse(response);
+        this.logger.logResponse(response);
 
         if (response.request._redirects?.length > 0) {
           console.log(`리다이렉트 발생: ${response.request._redirects.length}번`);
@@ -145,7 +145,7 @@ class HttpClient {
           }
         }
 
-        this.logUtils.logError(error, 'response_error');
+        this.logger.logError(error, 'response_error');
 
         if (error.response?.status >= 300 && error.response?.status < 400) {
           console.log(`리다이렉트 응답 (${error.response.status}):`, error.response.headers.location);

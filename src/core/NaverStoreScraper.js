@@ -1,10 +1,9 @@
-import BaseScraper from './BaseScraper.js';
 import HttpClient from './HttpClient.js';
-import CategoryDetector from './CategoryDetector.js';
+import CategoryDetector from '../services/CategoryDetector.js';
 import GraphQLBuilder from '../graphql/GraphQLBuilder.js';
 import ResponseParser from '../parsers/ResponseParser.js';
-import CoordinateUtils from '../utils/CoordinateUtils.js';
-import FileUtils from '../utils/FileUtils.js';
+import CoordinateUtils from '../services/CoordinateUtils.js';
+import StorageService from '../services/storageService.js';
 import { DEFAULT_COORDS, DEFAULT_OPTIONS, API_URLS } from '../config/constants.js';
 
 class NaverStoreScraper extends BaseScraper {

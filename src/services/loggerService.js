@@ -1,14 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 
-class LogUtils {
+class LoggerService {
   constructor(options = {}) {
     this.config = {
-      enabled: options.enableLogging !== false,
-      logRequests: options.logRequests !== false,
-      logResponses: options.logResponses !== false,
-      logErrors: options.logErrors !== false,
-      logDirectory: options.logDirectory || 'log'
+      enabled: process.env.ENABLE_LOGGING !== 'false' && options.enableLogging !== false,
+      logRequests: process.env.LOG_REQUESTS !== 'false' && options.logRequests !== false,
+      logResponses: process.env.LOG_RESPONSES !== 'false' && options.logResponses !== false,
+      logErrors: process.env.LOG_ERRORS !== 'false' && options.logErrors !== false,
+      logDirectory: process.env.LOG_DIRECTORY || options.logDirectory || 'log'
     };
     
     this.ensureLogDirectories();
@@ -130,4 +130,4 @@ class LogUtils {
   }
 }
 
-export default LogUtils;
+export default LoggerService;
