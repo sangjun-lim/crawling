@@ -1,20 +1,26 @@
-import BaseScraper from '../../core/BaseScraper.js';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
 import AntiDetectionUtils from '../../utils/AntiDetectionUtils.js';
+import LoggerService from '../../services/loggerService.js';
+import ProxyService from '../../services/proxyService.js';
+import StorageService from '../../services/storageService.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { FingerprintGenerator } from 'fingerprint-generator';
 
-class NaverShoppingScraper extends BaseScraper {
+class NaverShoppingScraper {
   constructor(options = {}) {
-    super(options);
-
+    // 서비스 조합 (Composition 패턴)
+    this.logger = new LoggerService(options);
+    this.proxyService = new ProxyService(options);
+    this.storageService = new StorageService(options);
+    
     this.options = {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 100,
       saveData: options.saveData ?? true,
+      enableLogging: options.enableLogging ?? true,
       ...options,
     };
 

@@ -1,15 +1,25 @@
-import BaseScraper from '../../core/BaseScraper.js';
 import HttpClient from '../../clients/httpClient.js';
-import CategoryDetector from '../../core/CategoryDetector.js';
+import CategoryDetector from '../../services/CategoryDetector.js';
 import GraphQLBuilder from '../../graphql/GraphQLBuilder.js';
 import ResponseParser from '../../parsers/ResponseParser.js';
-import CoordinateUtils from '../../utils/CoordinateUtils.js';
-import FileUtils from '../../services/storageService.js';
+import CoordinateUtils from '../../services/CoordinateUtils.js';
+import StorageService from '../../services/storageService.js';
+import LoggerService from '../../services/loggerService.js';
+import ProxyService from '../../services/proxyService.js';
 import { DEFAULT_COORDS, DEFAULT_OPTIONS, API_URLS } from '../../config/constants.js';
 
-class NaverStoreScraper extends BaseScraper {
+class NaverStoreScraper {
   constructor(options = {}) {
-    super(options);
+    // 서비스 조합 (Composition 패턴)
+    this.logger = new LoggerService(options);
+    this.proxyService = new ProxyService(options);
+    this.storageService = new StorageService(options);
+    
+    this.options = {
+      timeout: options.timeout || 30000,
+      enableLogging: options.enableLogging ?? true,
+      ...options
+    };
     
     this.config = {
       defaultCoords: DEFAULT_COORDS,
