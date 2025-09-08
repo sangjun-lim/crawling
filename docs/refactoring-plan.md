@@ -60,14 +60,18 @@ src/
 
 ### 3. services/ 디렉토리 생성
 
-**저장 서비스:**
+**통합 저장 서비스:**
 
-- `src/utils/FileUtils.js` → `src/services/storageService.js`
-- `src/core/CoupangDataStorage.js` → `src/services/coupangStorageService.js`
+- `src/utils/FileUtils.js` + `src/core/CoupangDataStorage.js` → `src/services/storageService.js`
+- 범용 저장(CSV/JSON)과 도메인 특화 저장을 하나의 서비스로 통합
 
-**로깅 서비스:**
+**독립 로깅 서비스:**
 
 - `src/utils/LogUtils.js` → `src/services/loggerService.js`
+
+**공통 유틸리티:**
+
+- `src/services/serviceUtils.js` (신규 생성 - 디렉토리 생성, 파일명 생성 등)
 
 ### 4. utils/ 디렉토리 정리
 
@@ -97,9 +101,24 @@ src/
 
 ### 스크래퍼별 브라우저 선택
 
-**네이버 쇼핑:** puppeteer-real-browser (캡차, 안티 디텍션 필요)
-**일반적인 사이트:** Playwright 또는 일반 Puppeteer
-**특수한 경우:** 사이트별 맞춤 설정
+**네이버 쇼핑:** puppeteer-real-browser (Gemini AI 캡차 해결, 전역 네트워크 모니터링)
+**네이버 스마트스토어:** Playwright (API 응답 인터셉션, HTML 폴백)
+**쿠팡:** HTTP-Only (브라우저 불필요, 순수 API 호출)
+**일반적인 사이트:** Playwright 기본 권장
+
+### 공통 설정 패턴
+
+**안티 디텍션 설정:**
+
+- Chrome 인수: `--disable-blink-features=AutomationControlled`
+- 한국 로케일: `ko-KR`, `Asia/Seoul`
+- 표준 뷰포트: 1920x1080 (데스크톱), 375x667 (모바일)
+
+**공통 기능:**
+
+- 프록시 지원, 자연스러운 지연시간 (800-2500ms)
+- 인간 같은 타이핑, 마우스 움직임 시뮬레이션
+- 세션 관리, 쿠키 처리, 에러 복구 (스크린샷)
 
 ## 코드 수정 범위
 
@@ -129,10 +148,25 @@ src/
 
 ### Phase 2: 기존 코드 분석 및 설계
 
-1. 기존 파일들의 의존성 관계 매핑
-2. 브라우저 클라이언트 팩토리 설계 분석
-3. 서비스 인터페이스 설계 및 명세
+1. **기존 파일들의 의존성 관계 매핑** ✅
+
+   - 6단계 의존성 레벨 분석 완료
+   - 고영향 파일 (constants.js, LogUtils.js, BaseScraper.js) 식별
+
+2. **브라우저 클라이언트 팩토리 설계 분석** ✅
+
+   - 3가지 브라우저 도구 패턴 분석: puppeteer-real, playwright, http-only
+   - 공통 설정 및 사이트별 요구사항 매핑
+   - 팩토리 패턴 설계 구조 정의
+
+3. **서비스 인터페이스 설계 및 명세** ✅
+
+   - 현재 서비스 패턴 분석: 저장(FileUtils, CoupangDataStorage), 로깅(LogUtils)
+   - 공통 설정 패턴 식별: 생성자 기반 옵션, 환경변수 통합
+   - 단순한 서비스 설계: BaseService 없이 독립적 서비스 + 공통 유틸리티
+
 4. 이동 순서 계획 수립 (의존성 기반)
+   - /docs/migration-plan.md 생성 완료.
 
 ### Phase 3: 병렬 구현 (복사 방식 - 안전함)
 
@@ -143,11 +177,41 @@ src/
 
 ### Phase 4: 의존성 순서대로 점진적 전환
 
-1. **1단계 - 순수 유틸리티**: `utils/` 파일들부터 전환
-2. **2단계 - 서비스 레이어**: `FileUtils.js` → `storageService.js`, `LogUtils.js` → `loggerService.js`
-3. **3단계 - 클라이언트 레이어**: `HttpClient.js` → `httpClient.js`, 브라우저 클라이언트들
-4. **4단계 - 스크래퍼 레이어**: 각 스크래퍼를 새 구조로 전환
-5. **각 파일별 프로세스**: 복사 → import 수정 → 즉시 테스트 → git commit (체크포인트)
+**의존성 분석 결과 기반 6단계 전환:**
+
+1. **Level 0 - 기반 파일들** (12개 파일)
+
+   - `config/categories.js`, `config/constants.js`
+   - GraphQL 쿼리 파일들 (`CommonQueries.js`, `RestaurantQueries.js` 등)
+   - 독립적 유틸리티 (`AntiDetectionUtils.js`, `ProxyManager.js`)
+
+2. **Level 1 - Config 의존 유틸리티** (7개 파일)
+
+   - `utils/LogUtils.js` → `services/loggerService.js`
+   - `utils/FileUtils.js` → `services/storageService.js`
+   - `CoordinateUtils.js`, `CategoryDetector.js`, `BaseScraper.js` 등
+
+3. **Level 2 - 클라이언트 레이어** (7개 파일)
+
+   - `core/HttpClient.js` → `clients/httpClient.js`
+   - `core/CurlHttpClient.js` → `clients/curlHttpClient.js`
+   - GraphQL 페이로드 빌더들
+
+4. **Level 3 - 중간 컴포넌트** (3개 파일)
+
+   - `GraphQLBuilder.js`, `ResponseParser.js`
+   - 특화 스크래퍼들 (`CoupangVendorScraper.js` 등)
+
+5. **Level 4 - 복잡한 스크래퍼들** (6개 파일)
+
+   - `core/CoupangCombinedScraper.js` → `scrapers/coupang/combinedScraper.js`
+   - 네이버 스크래퍼들 → `scrapers/naver/`
+
+6. **Level 5-6 - 최종 컴포넌트** (2개 파일)
+   - `core/NaverStoreScraper.js` → `scrapers/naver/naverStoreScraper.js`
+   - 메인 `index.js` 업데이트
+
+**각 파일별 프로세스**: 복사 → import 수정 → 즉시 테스트 → git commit (체크포인트)
 
 ### Phase 5: 기존 파일 정리 및 통합
 
@@ -177,8 +241,14 @@ src/
 **체크포인트:**
 
 - Phase 3 완료 후: 새 구조 파일들이 독립적으로 작동하는지 확인
-- Phase 4 각 단계 후: 해당 레이어 정상 동작 확인
+- Phase 4 각 Level 완료 후: 해당 레이어 정상 동작 확인
 - Phase 5 완료 후: 전체 시스템 정상 동작 확인
+
+**고영향 파일 우선 처리:**
+
+- `config/constants.js` (8+ 파일이 의존) → Level 0에서 최우선 처리
+- `utils/LogUtils.js` (4+ 파일이 의존) → Level 1에서 최우선 처리
+- `BaseScraper.js` (4+ 스크래퍼가 상속) → Level 1에서 우선 처리
 
 ## 기대 효과
 
