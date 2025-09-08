@@ -1,4 +1,4 @@
-import HospitalQueries from '../queries/HospitalQueries.js';
+import HospitalQueries from '../queries/hospital-queries.js';
 import CommonQueries from '../queries/common-queries.js';
 import { DEFAULT_COORDS, BUSINESS_TYPES } from '../../config/constants.js';
 

@@ -1,4 +1,4 @@
-import PlaceQueries from '../queries/PlaceQueries.js';
+import PlaceQueries from '../queries/place-queries.js';
 import CommonQueries from '../queries/common-queries.js';
 import { DEFAULT_COORDS, BUSINESS_TYPES } from '../../config/constants.js';
 
