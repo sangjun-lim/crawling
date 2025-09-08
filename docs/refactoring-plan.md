@@ -168,12 +168,46 @@ src/
 4. 이동 순서 계획 수립 (의존성 기반)
    - /docs/migration-plan.md 생성 완료.
 
-### Phase 3: 병렬 구현 (복사 방식 - 안전함)
+### Phase 3: 병렬 구현 (복사 방식 - 안전함) ✅
 
-1. 기존 파일을 새 위치에 **복사** (이동하지 않음)
-2. 복사된 파일들의 import 경로를 새 구조에 맞게 수정
-3. 새로운 팩토리 클래스들 구현
-4. 새 구조 파일들이 독립적으로 작동하는지 확인
+1. 기존 파일을 새 위치에 **복사** (이동하지 않음) ✅
+2. 복사된 파일들의 import 경로를 새 구조에 맞게 수정 ✅
+3. 새로운 팩토리 클래스들 구현 ✅
+4. 새 구조 파일들이 독립적으로 작동하는지 확인 ✅
+
+### Phase 3.5: BaseScraper 패턴 검토 및 설계 개선 ✅
+
+**BaseScraper 분석 결과**:
+
+**현재 문제점들**:
+- **일관성 부재**: `CoupangVendorScraper`는 상속 안함, 패턴이 이미 깨진 상태
+- **강제된 추상화**: HTTP/Playwright/Puppeteer 등 완전히 다른 도구들을 억지로 같은 인터페이스로 통합
+- **단일 책임 원칙 위반**: 프록시 설정 + 로깅 + 초기화를 한 클래스가 담당
+- **불필요한 복잡성**: 상속 후 다시 자체 설정 재정의하는 패턴
+
+**개선 설계 결정**: **BaseScraper 제거 + Composition 패턴 적용**
+
+```javascript
+// 기존: 강제된 상속 구조
+class NaverStoreScraper extends BaseScraper {
+  constructor(options = {}) {
+    super(options); // 복잡한 초기화
+    // 그 후 다시 자체 설정...
+  }
+}
+
+// 개선: 필요한 서비스만 조합
+class NaverStoreScraper {
+  constructor(options = {}) {
+    this.logger = new LoggerService(options);
+    this.proxyManager = new ProxyManager(options.proxy);
+    this.httpClient = new HttpClient({ proxy: this.proxyManager.getHttpConfig() });
+    this.categoryDetector = new CategoryDetector();
+  }
+}
+```
+
+**적용 계획**: Phase 4에서 BaseScraper 의존성 제거와 함께 Composition 패턴으로 전환
 
 ### Phase 4: 의존성 순서대로 점진적 전환
 
@@ -189,7 +223,10 @@ src/
 
    - `utils/LogUtils.js` → `services/loggerService.js`
    - `utils/FileUtils.js` → `services/storageService.js`
-   - `CoordinateUtils.js`, `CategoryDetector.js`, `BaseScraper.js` 등
+   - `CoordinateUtils.js`, `CategoryDetector.js` 등
+   - **BaseScraper.js 제거**: 상속 구조를 Composition 패턴으로 전환
+     - ProxyManager 서비스 생성 (프록시 관리)
+     - 각 스크래퍼에서 필요한 서비스만 조합
 
 3. **Level 2 - 클라이언트 레이어** (7개 파일)
 
@@ -248,7 +285,7 @@ src/
 
 - `config/constants.js` (8+ 파일이 의존) → Level 0에서 최우선 처리
 - `utils/LogUtils.js` (4+ 파일이 의존) → Level 1에서 최우선 처리
-- `BaseScraper.js` (4+ 스크래퍼가 상속) → Level 1에서 우선 처리
+- `BaseScraper.js` (4+ 스크래퍼가 상속) → **Level 1에서 제거 및 Composition 패턴 전환**
 
 ## 기대 효과
 
