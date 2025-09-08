@@ -140,52 +140,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
   }
 
   /**
-   * 영수증 CAPTCHA 데이터를 대기한 후 보안 확인 처리 시작
-   */
-  async waitForReceiptDataThenStartSecurityCheck() {
-    try {
-      this.logInfo('🕰️ 영수증 CAPTCHA 데이터 대기 시작... (최대 10초)');
-
-      // 영수증 데이터 대기 Promise 설정
-      this.waitingForReceiptData = true;
-      this.receiptDataPromise = new Promise((resolve) => {
-        this.resolveReceiptData = resolve;
-      });
-
-      // 10초 타임아웃과 함께 영수증 데이터 대기
-      const receiptData = await Promise.race([
-        this.receiptDataPromise,
-        new Promise((resolve) => {
-          setTimeout(() => {
-            this.logInfo(
-              '⏰ 영수증 데이터 대기 타임아웃 (10초) - 데이터 없이 진행'
-            );
-            resolve(null);
-          }, 10000);
-        }),
-      ]);
-
-      // Promise 정리
-      this.waitingForReceiptData = false;
-      this.receiptDataPromise = null;
-      this.resolveReceiptData = null;
-
-      // 보안 확인 처리 시작
-      if (receiptData) {
-        this.logInfo('✅ 영수증 데이터와 함께 보안 확인 처리 시작');
-      } else {
-        this.logInfo('⚠️ 영수증 데이터 없이 보안 확인 처리 시작');
-      }
-
-      await this.waitForSecurityCheck(receiptData);
-    } catch (error) {
-      this.logError(`영수증 데이터 대기 실패: ${error.message}`);
-      // 에러 시에도 보안 확인 처리는 실행
-      await this.waitForSecurityCheck(null);
-    }
-  }
-
-  /**
    * 랜덤 대기 시간 생성 (자연스러운 사용자 행동 시뮬레이션)
    */
   async randomWait(min = 800, max = 2500) {
@@ -526,65 +480,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
   }
 
   /**
-   * 캡차 검증 네트워크 응답 모니터링 설정
-   * @param {import('puppeteer').Page} page 페이지 객체
-   * @returns {Promise<{promise: Promise<any>, cleanup: Function}>} 응답 대기 Promise와 정리 함수
-   */
-  async setupCaptchaNetworkListener(page) {
-    let responseResolve, responseReject;
-    let responseTimeout;
-
-    const responsePromise = new Promise((resolve, reject) => {
-      responseResolve = resolve;
-      responseReject = reject;
-    });
-
-    const responseHandler = async (response) => {
-      const url = response.url();
-      if (
-        url.includes('/verify') &&
-        url.includes('ncpt.naver.com') &&
-        response.ok()
-      ) {
-        try {
-          this.logInfo('responseHandler 호출');
-          const responseText = await response.text();
-
-          // '스테이크 접시(responseText)'가 있는지 확인합니다.
-          if (responseText) {
-            // 접시가 있으면, 맛있게 먹습니다 (데이터 처리).
-            const data = JSON.parse(responseText);
-            this.logInfo(`✅ 드디어 진짜 응답 도착: ${responseText}`);
-            clearTimeout(responseTimeout);
-            responseResolve(data);
-          }
-          // const data = await response.json();
-          // this.logInfo(`🔍 캡차 검증 API 응답: ${JSON.stringify(data)}`);
-          // clearTimeout(responseTimeout);
-          // responseResolve(data);
-        } catch (error) {
-          this.logError(`캡차 검증 응답 파싱 실패: ${error}`);
-        }
-      }
-    };
-
-    page.on('response', responseHandler);
-
-    // 10초 타임아웃 설정
-    responseTimeout = setTimeout(() => {
-      page.off('response', responseHandler);
-      responseReject(new Error('캡차 검증 응답 대기 시간 초과'));
-    }, 10000);
-
-    const cleanup = () => {
-      page.off('response', responseHandler);
-      clearTimeout(responseTimeout);
-    };
-
-    return { promise: responsePromise, cleanup };
-  }
-
-  /**
    * 캡차 제출 (단순 클릭만)
    * @param {import('puppeteer').Page} page 페이지 객체
    * @param {import('puppeteer').ElementHandle} submitButton 제출 버튼 요소
@@ -912,242 +807,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
   }
 
   /**
-   * 보안 확인 페이지 처리 - 사용자가 수동으로 해결할 때까지 대기
-   * @param {Object|null} receiptData - 영수증 CAPTCHA 데이터 (있는 경우)
-   */
-  async waitForSecurityCheck(receiptData = null) {
-    this.logInfo(
-      `🛡️ waitForSecurityCheck 함수 시작 (receiptData: ${
-        receiptData ? '있음' : '없음'
-      })`
-    );
-
-    // 영수증 데이터가 있으면 표시
-    if (receiptData && receiptData.receiptData) {
-      this.logInfo('');
-      this.logInfo('🧐🧐🧐 영수증 CAPTCHA 데이터 수신됨 🧐🧐🧐');
-      this.logInfo(`   • 질문: ${receiptData.receiptData.question}`);
-      this.logInfo(
-        `   • 이미지 있음: ${receiptData.receiptData.image ? '예' : '아니오'}`
-      );
-      if (receiptData.receiptData.image) {
-        this.logInfo(
-          `   • 이미지 크기: ${receiptData.receiptData.image.length} 문자`
-        );
-        this.logInfo(
-          `   • 이미지 형식: ${receiptData.receiptData.image.substring(
-            0,
-            30
-          )}...`
-        );
-      }
-      this.logInfo('');
-    }
-    try {
-      // 페이지 네비게이션 완료 대기
-      await this.page
-        .waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 })
-        .catch(() => {});
-
-      let pageContent;
-      try {
-        // 보안 확인 페이지 감지
-        pageContent = await this.page.content();
-      } catch (contentError) {
-        this.logInfo('페이지 컨텐츠 가져오기 실패 - 잠시 후 재시도...');
-        await this.randomWait(2000, 3000);
-        pageContent = await this.page.content();
-      }
-
-      const currentUrl = this.page.url();
-      const pageTitle = await this.page.title();
-
-      // 다양한 보안 확인 패턴 감지
-      const securityPatterns = [
-        '보안 확인을 완료해 주세요',
-        'captcha',
-        'CAPTCHA',
-        'WtmCaptcha',
-        'rcpt_answer',
-        '정답을 입력해주세요',
-        '이 절차는 귀하가 실제 사용자임을 확인',
-      ];
-
-      // 디버깅: URL과 제목 항상 출력
-      this.logInfo('🔍 보안 확인 페이지 검사 중...');
-      this.logInfo('📍 현재 URL: ' + currentUrl);
-      this.logInfo('📋 페이지 제목: ' + pageTitle);
-
-      const isSecurityCheck = securityPatterns.some(
-        (pattern) =>
-          pageContent.includes(pattern) || pageTitle.includes(pattern)
-      );
-
-      // 디버깅: 패턴 매칭 결과
-      const foundPatterns = securityPatterns.filter(
-        (pattern) =>
-          pageContent.includes(pattern) || pageTitle.includes(pattern)
-      );
-      this.logInfo(
-        '🎯 매칭된 패턴: ' +
-          (foundPatterns.length > 0 ? foundPatterns.join(', ') : '없음')
-      );
-
-      if (isSecurityCheck) {
-        this.logInfo('🚨🚨🚨 보안 확인 페이지 감지됨! 🚨🚨🚨');
-        this.logInfo('📍 현재 URL: ' + currentUrl);
-        this.logInfo('📋 페이지 제목: ' + pageTitle);
-        this.logInfo('🔍 감지된 보안 확인 유형을 분석 중...');
-
-        // 감지된 패턴 출력
-        const detectedPatterns = securityPatterns.filter(
-          (pattern) =>
-            pageContent.includes(pattern) || pageTitle.includes(pattern)
-        );
-        this.logInfo('🎯 감지된 패턴: ' + detectedPatterns.join(', '));
-
-        this.logInfo('');
-        this.logInfo(
-          '┌─────────────────────────────────────────────────────────┐'
-        );
-        this.logInfo(
-          '│                  🛡️ 보안 확인 필요 🛡️                    │'
-        );
-        this.logInfo(
-          '├─────────────────────────────────────────────────────────┤'
-        );
-        this.logInfo(
-          '│  👆 브라우저에서 직접 보안 확인을 완료해 주세요          │'
-        );
-        this.logInfo(
-          '│  📝 영수증 캡차, 문자 입력, 이미지 선택 등을 해결하세요  │'
-        );
-        this.logInfo(
-          '│  ⏰ 최대 15분간 대기합니다                              │'
-        );
-        this.logInfo(
-          '│  🔄 완료 후 자동으로 다음 단계로 진행됩니다             │'
-        );
-        this.logInfo(
-          '└─────────────────────────────────────────────────────────┘'
-        );
-        this.logInfo('');
-
-        // 보안 확인이 완료될 때까지 대기 (최대 15분)
-        const maxWaitTime = 15 * 60 * 1000; // 15분
-        const checkInterval = 3000; // 3초마다 확인
-        let waitedTime = 0;
-
-        while (waitedTime < maxWaitTime) {
-          await new Promise((resolve) => setTimeout(resolve, checkInterval));
-          waitedTime += checkInterval;
-
-          // 현재 페이지 내용 다시 확인
-          let currentContent;
-          let currentTitle;
-          try {
-            currentContent = await this.page.content();
-            currentTitle = await this.page.title();
-          } catch (contentError) {
-            this.logInfo('⚠️ 페이지 컨텐츠 가져오기 실패 - 계속 대기...');
-            continue;
-          }
-
-          const newUrl = this.page.url();
-
-          // 보안 확인 패턴이 더 이상 없는지 확인
-          const stillHasSecurityCheck = securityPatterns.some(
-            (pattern) =>
-              currentContent.includes(pattern) || currentTitle.includes(pattern)
-          );
-
-          // 보안 확인 페이지를 벗어났는지 확인
-          if (
-            !stillHasSecurityCheck &&
-            (newUrl.includes('naver.com') || newUrl.includes('shopping'))
-          ) {
-            this.logSuccess('');
-            this.logSuccess('🎉🎉🎉 보안 확인 완료 감지! 🎉🎉🎉');
-            this.logSuccess('📍 새로운 URL: ' + newUrl);
-            this.logSuccess('📋 새로운 제목: ' + currentTitle);
-            this.logSuccess('✅ 다음 단계로 진행합니다...');
-            this.logSuccess('');
-            break;
-          }
-
-          // 진행 상황 로그 (30초마다)
-          if (waitedTime % 30000 === 0) {
-            const remainingMinutes = Math.ceil(
-              (maxWaitTime - waitedTime) / 60000
-            );
-            this.logInfo(
-              `⏳ 보안 확인 대기 중... (남은 시간: ${remainingMinutes}분)`
-            );
-            this.logInfo(`📍 현재 URL: ${newUrl}`);
-          }
-        }
-
-        if (waitedTime >= maxWaitTime) {
-          this.logError('⚠️ 보안 확인 대기 시간 초과 (15분)');
-          throw new Error('보안 확인 대기 시간 초과');
-        }
-
-        // 보안 확인 완료 후 세션 상태 확인
-        this.logInfo('🔍 보안 확인 완료 후 세션 상태 확인 중...');
-        await this.randomWait(2000, 3000);
-
-        // 현재 쿠키 확인
-        const cookies = await this.page.cookies();
-        this.logInfo(`🍪 보유 쿠키 수: ${cookies.length}`);
-
-        // 중요 쿠키만 표시 (너무 많은 로그 방지)
-        const importantCookies = cookies.filter(
-          (cookie) =>
-            cookie.name.includes('NID') ||
-            cookie.name.includes('session') ||
-            cookie.name.includes('auth')
-        );
-
-        if (importantCookies.length > 0) {
-          importantCookies.forEach((cookie, index) => {
-            this.logInfo(
-              `🍪 주요 쿠키 ${index + 1}: ${
-                cookie.name
-              } = ${cookie.value.substring(0, 20)}...`
-            );
-          });
-        }
-
-        // 페이지 URL과 상태 확인
-        const finalUrl = this.page.url();
-        this.logInfo(`📍 보안 확인 완료 후 최종 URL: ${finalUrl}`);
-
-        // 페이지 타이틀 확인
-        const finalPageTitle = await this.page.title();
-        this.logInfo(`📋 페이지 제목: ${finalPageTitle}`);
-
-        // 페이지에 검색창이 있는지 확인
-        const hasSearchInput =
-          (await this.page.$('input[type="text"]')) !== null;
-        this.logInfo(
-          `🔍 검색창 존재 여부: ${hasSearchInput ? '있음' : '없음'}`
-        );
-
-        this.logSuccess('✅ 세션 상태 확인 완료 - 정상적으로 진행 중');
-      } else {
-        // 보안 확인 페이지가 감지되지 않았을 때
-        this.logInfo('✅ 보안 확인 페이지 없음 - 정상 진행');
-      }
-    } catch (error) {
-      this.logError(`보안 확인 처리 오류: ${error.message}`);
-      // 보안 확인 에러는 치명적이지 않을 수 있으므로 경고만 출력
-      this.logInfo(
-        '⚠️ 보안 확인 처리에서 오류가 발생했지만 계속 진행합니다...'
-      );
-    }
-  }
-
-  /**
    * 특정 상품 ID가 포함된 상품 클릭하는 시나리오
    */
   async scrapeProductPriceComparison(searchKeyword, productId) {
@@ -1339,9 +998,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
 
       // 페이지 로딩 완료 대기
       await this.randomWait(1500, 3000);
-
-      // 보안 확인 페이지 처리는 네트워크 인터셉터에서 자동 처리
-      // await this.waitForSecurityCheck(); // 제거 - 인터셉터에서 처리
 
       // 4-1단계: productId가 포함된 상품 찾기 (최대 10페이지)
       this.logInfo(
@@ -1566,9 +1222,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
       // 페이지 로딩 완료 대기
       await this.randomWait(2000, 4000);
 
-      // 보안 확인 페이지 처리는 네트워크 인터셉터에서 자동 처리
-      // await this.waitForSecurityCheck(); // 제거 - 인터셉터에서 처리
-
       const finalUrl = this.page.url();
       this.logInfo(`최종 URL: ${finalUrl}`);
 
@@ -1651,31 +1304,6 @@ class NaverShoppingRealBrowserScraper extends BaseScraper {
         }
       }
 
-      throw error;
-    }
-  }
-
-  /**
-   * HTML을 파일로 저장
-   */
-  async saveHtml(htmlContent, filename = null) {
-    try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const defaultFilename = `result/naver-shopping-${timestamp}.html`;
-      const filepath = filename || defaultFilename;
-
-      // result 디렉토리가 없으면 생성
-      const resultDir = 'result';
-      if (!fs.existsSync(resultDir)) {
-        await fsPromises.mkdir(resultDir, { recursive: true });
-      }
-
-      await fsPromises.writeFile(filepath, htmlContent, 'utf8');
-      this.logSuccess(`HTML 파일 저장 완료: ${filepath}`);
-
-      return filepath;
-    } catch (error) {
-      this.logError(`HTML 파일 저장 실패: ${error.message}`);
       throw error;
     }
   }
