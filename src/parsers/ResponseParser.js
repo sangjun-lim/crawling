@@ -1,4 +1,4 @@
-import FileUtils from '../utils/FileUtils.js';
+import StorageService from '../services/storageService.js';
 
 class ResponseParser {
   parseStoresFromGraphQLResponse(responseData, page = 1) {
@@ -10,7 +10,7 @@ class ResponseParser {
       if (mainResponse?.data) {
         const mainStores = this.parseMainResponse(mainResponse.data);
         const normalizedMainStores = mainStores.map(store => ({
-          ...FileUtils.normalizeStoreData(store),
+          ...StorageService.normalizeStoreData(store),
           type: 'organic'
         }));
         allStores.push(...normalizedMainStores);
@@ -22,7 +22,7 @@ class ResponseParser {
       if (adsResponse?.data?.adBusinesses?.items) {
         const adBusinesses = adsResponse.data.adBusinesses.items;
         const normalizedAds = adBusinesses.map(ad => ({
-          ...FileUtils.normalizeStoreData(ad),
+          ...StorageService.normalizeStoreData(ad),
           type: 'ad',
           adId: ad.adId
         }));
