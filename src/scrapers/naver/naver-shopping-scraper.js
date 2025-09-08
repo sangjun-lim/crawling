@@ -1,9 +1,9 @@
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
-import AntiDetectionUtils from '../../utils/AntiDetectionUtils.js';
-import LoggerService from '../../services/loggerService.js';
-import ProxyService from '../../services/proxyService.js';
-import StorageService from '../../services/storageService.js';
+import AntiDetectionService from '../../services/anti-detection-service.js';
+import LoggerService from '../../services/logger-service.js';
+import ProxyService from '../../services/proxy-service.js';
+import StorageService from '../../services/storage-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { FingerprintGenerator } from 'fingerprint-generator';
@@ -14,7 +14,7 @@ class NaverShoppingScraper {
     this.logger = new LoggerService(options);
     this.proxyService = new ProxyService(options);
     this.storageService = new StorageService(options);
-    
+
     this.options = {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
@@ -415,7 +415,7 @@ class NaverShoppingScraper {
         const endY = box.y + box.height / 2;
 
         // 자연스러운 마우스 움직임 시뮬레이션
-        await AntiDetectionUtils.naturalMouseMovement(
+        await AntiDetectionService.naturalMouseMovement(
           this.page,
           { x: startX, y: startY },
           { x: endX, y: endY },
@@ -458,7 +458,7 @@ class NaverShoppingScraper {
       });
 
       // 페이지 안정적 로딩 대기
-      await AntiDetectionUtils.waitForStableLoad(this.page);
+      await AntiDetectionService.waitForStableLoad(this.page);
 
       // 캡차 및 보안 확인 처리
       await this.waitForSecurityCheck();

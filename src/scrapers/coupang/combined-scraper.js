@@ -1,7 +1,7 @@
-import HttpClient from '../../clients/httpClient.js';
-import LogUtils from '../../services/loggerService.js';
-import CheckpointManager from '../../core/CheckpointManager.js';
-import CoupangDataStorage from '../../services/coupangDataStorage.js';
+import HttpClient from '../../clients/http-client.js';
+import LoggerService from '../../services/logger-service.js';
+import CheckpointService from '../../services/checkpoint-service.js';
+import CoupangStorageService from '../../services/coupang-storage-service.js';
 
 class CoupangCombinedScraper {
   constructor(options = {}) {
@@ -10,9 +10,9 @@ class CoupangCombinedScraper {
       enableCookies: true,
       ...options,
     });
-    this.logUtils = new LogUtils(options);
-    this.checkpointManager = new CheckpointManager(options);
-    this.storage = new CoupangDataStorage(options);
+    this.logUtils = new LoggerService(options);
+    this.checkpointManager = new CheckpointService(options);
+    this.storage = new CoupangStorageService(options);
 
     // Rate limiting: 벤더당 2번 요청이므로 200ms 간격 (300 requests per minute)
     this.rateLimitDelay = 150; // milliseconds

@@ -1,14 +1,14 @@
 import HospitalQueries from '../queries/HospitalQueries.js';
-import CommonQueries from '../queries/CommonQueries.js';
+import CommonQueries from '../queries/common-queries.js';
 import { DEFAULT_COORDS, BUSINESS_TYPES } from '../../config/constants.js';
 
 class HospitalPayload {
   build(keyword, display, start, adStart, coords = null) {
     const coordsToUse = coords || DEFAULT_COORDS;
-    
+
     return [
       {
-        operationName: "getNxList",
+        operationName: 'getNxList',
         variables: {
           isNmap: true,
           isBounds: true,
@@ -20,23 +20,23 @@ class HospitalPayload {
             filterBooking: false,
             filterOpentime: false,
             filterSpecialist: false,
-            sortingOrder: "precision",
+            sortingOrder: 'precision',
             x: coordsToUse.x,
             y: coordsToUse.y,
             clientX: coordsToUse.clientX,
             clientY: coordsToUse.clientY,
             bounds: coordsToUse.bounds,
-            deviceType: "pcmap"
+            deviceType: 'pcmap',
           },
           reverseGeocodingInput: {
             x: coordsToUse.clientX,
-            y: coordsToUse.clientY
-          }
+            y: coordsToUse.clientY,
+          },
         },
-        query: HospitalQueries.getNxList()
+        query: HospitalQueries.getNxList(),
       },
       {
-        operationName: "getAdBusinessList",
+        operationName: 'getAdBusinessList',
         variables: {
           input: {
             query: keyword,
@@ -44,16 +44,20 @@ class HospitalPayload {
             x: coordsToUse.x,
             y: coordsToUse.y,
             businessType: BUSINESS_TYPES.hospital,
-            deviceType: "pcmap",
-            localQueryString: `pr=place_pcmap&version=2.0.0&st=poi&q_enc=utf-8&r_enc=utf-8&sm=all.basic.use_quasar_cid.force_use_center_coord&r_format=json&r_psglen=none&so=rel.dsc&hl=none&ic=basic&rp=none&r_query_info=1&start=1&display=${display}&q=${encodeURIComponent(keyword)}&q_center_coordinate=${coordsToUse.x}%3B${coordsToUse.y}&r_query_select=1&eq_property=adult`,
+            deviceType: 'pcmap',
+            localQueryString: `pr=place_pcmap&version=2.0.0&st=poi&q_enc=utf-8&r_enc=utf-8&sm=all.basic.use_quasar_cid.force_use_center_coord&r_format=json&r_psglen=none&so=rel.dsc&hl=none&ic=basic&rp=none&r_query_info=1&start=1&display=${display}&q=${encodeURIComponent(
+              keyword
+            )}&q_center_coordinate=${coordsToUse.x}%3B${
+              coordsToUse.y
+            }&r_query_select=1&eq_property=adult`,
             bypassStyleClous: false,
             clientX: coordsToUse.clientX,
-            clientY: coordsToUse.clientY
+            clientY: coordsToUse.clientY,
           },
-          isNmap: true
+          isNmap: true,
         },
-        query: CommonQueries.getAdBusinessListQuery()
-      }
+        query: CommonQueries.getAdBusinessListQuery(),
+      },
     ];
   }
 }

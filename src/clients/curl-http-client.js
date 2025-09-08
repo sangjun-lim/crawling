@@ -1,5 +1,5 @@
 import { CurlImpersonate } from 'node-curl-impersonate';
-import LogUtils from '../services/loggerService.js';
+import LogUtils from '../services/logger-service.js';
 
 class CurlHttpClient {
   constructor(options = {}) {

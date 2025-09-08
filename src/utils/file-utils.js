@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-class ServiceUtils {
+class FileUtils {
   /**
    * 디렉토리 생성 (중첩 디렉토리 지원)
    */
@@ -96,4 +96,4 @@ class ServiceUtils {
   }
 }
 
-export default ServiceUtils;
+export default FileUtils;

@@ -1,7 +1,7 @@
 import { connect } from 'puppeteer-real-browser';
-import LoggerService from '../../services/loggerService.js';
-import ProxyService from '../../services/proxyService.js';
-import StorageService from '../../services/storageService.js';
+import LoggerService from '../../services/logger-service.js';
+import ProxyService from '../../services/proxy-service.js';
+import StorageService from '../../services/storage-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -12,7 +12,7 @@ class NaverShoppingRealBrowserScraper {
     this.logger = new LoggerService(options);
     this.proxyService = new ProxyService(options);
     this.storageService = new StorageService(options);
-    
+
     this.options = {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,

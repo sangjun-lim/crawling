@@ -1,14 +1,14 @@
-import AccommodationQueries from '../queries/AccommodationQueries.js';
-import CommonQueries from '../queries/CommonQueries.js';
+import AccommodationQueries from '../queries/accommodation-queries.js';
+import CommonQueries from '../queries/common-queries.js';
 import { DEFAULT_COORDS, BUSINESS_TYPES } from '../../config/constants.js';
 
 class AccommodationPayload {
   build(keyword, display, start, adStart, coords = null) {
     const coordsToUse = coords || DEFAULT_COORDS;
-    
+
     return [
       {
-        operationName: "getAccommodationList",
+        operationName: 'getAccommodationList',
         variables: {
           useReverseGeocode: true,
           input: {
@@ -18,19 +18,19 @@ class AccommodationPayload {
             x: coordsToUse.x,
             y: coordsToUse.y,
             bounds: coordsToUse.bounds,
-            deviceType: "pcmap"
+            deviceType: 'pcmap',
           },
           isNmap: true,
           isBounds: true,
           reverseGeocodingInput: {
             x: coordsToUse.clientX,
-            y: coordsToUse.clientY
-          }
+            y: coordsToUse.clientY,
+          },
         },
-        query: AccommodationQueries.getAccommodationList()
+        query: AccommodationQueries.getAccommodationList(),
       },
       {
-        operationName: "getAdBusinessList",
+        operationName: 'getAdBusinessList',
         variables: {
           input: {
             query: keyword,
@@ -38,14 +38,16 @@ class AccommodationPayload {
             x: coordsToUse.x,
             y: coordsToUse.y,
             businessType: BUSINESS_TYPES.accommodation,
-            deviceType: "pcmap",
-            localQueryString: `version=2.0.0&pr=place&start=1&display=${display}&q=${encodeURIComponent(keyword)}`,
-            bypassStyleClous: false
+            deviceType: 'pcmap',
+            localQueryString: `version=2.0.0&pr=place&start=1&display=${display}&q=${encodeURIComponent(
+              keyword
+            )}`,
+            bypassStyleClous: false,
           },
-          isNmap: true
+          isNmap: true,
         },
-        query: CommonQueries.getAdBusinessListQuery()
-      }
+        query: CommonQueries.getAdBusinessListQuery(),
+      },
     ];
   }
 }

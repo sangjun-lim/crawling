@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
 
-class CoupangDataStorage {
+class CoupangStorageService {
     constructor(options = {}) {
         this.storageType = options.storageType || 'file'; // 'file', 'database', 'json'
         this.outputDir = options.outputDir || 'result';
@@ -443,4 +443,4 @@ class CoupangDataStorage {
     }
 }
 
-export default CoupangDataStorage;
+export default CoupangStorageService;

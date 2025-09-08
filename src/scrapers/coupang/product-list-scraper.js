@@ -1,5 +1,5 @@
-import HttpClient from '../../clients/httpClient.js';
-import LogUtils from '../../services/loggerService.js';
+import HttpClient from '../../clients/http-client.js';
+import LogUtils from '../../services/logger-service.js';
 
 class CoupangProductListScraper {
   constructor(options = {}) {
@@ -87,12 +87,12 @@ class CoupangProductListScraper {
     let nextPageKey = 0;
     let currentPage = 1;
 
-    console.log(
-      `${vendorId} 상품 수집 시작 (최대 ${maxProducts}개)`
-    );
+    console.log(`${vendorId} 상품 수집 시작 (최대 ${maxProducts}개)`);
 
     while (allProducts.length < maxProducts) {
-      console.log(`페이지 ${currentPage} 수집 중... (nextPageKey: ${nextPageKey})`);
+      console.log(
+        `페이지 ${currentPage} 수집 중... (nextPageKey: ${nextPageKey})`
+      );
 
       const result = await this.getProductList({
         vendorId,
@@ -113,13 +113,17 @@ class CoupangProductListScraper {
 
       // 필요한 만큼만 추가하고 수집시간 추가
       const remainingNeeded = maxProducts - allProducts.length;
-      const productsToAdd = products.slice(0, remainingNeeded).map(product => ({
-        ...product,
-        collectedAt: new Date().toISOString()
-      }));
-      
+      const productsToAdd = products
+        .slice(0, remainingNeeded)
+        .map((product) => ({
+          ...product,
+          collectedAt: new Date().toISOString(),
+        }));
+
       allProducts.push(...productsToAdd);
-      console.log(`페이지 ${currentPage}: ${productsToAdd.length}개 상품 수집 (총 ${allProducts.length}개)`);
+      console.log(
+        `페이지 ${currentPage}: ${productsToAdd.length}개 상품 수집 (총 ${allProducts.length}개)`
+      );
 
       // 목표 개수에 도달하면 종료
       if (allProducts.length >= maxProducts) {

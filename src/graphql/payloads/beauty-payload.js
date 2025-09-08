@@ -1,14 +1,14 @@
-import BeautyQueries from '../queries/BeautyQueries.js';
-import CommonQueries from '../queries/CommonQueries.js';
+import BeautyQueries from '../queries/beauty-queries.js';
+import CommonQueries from '../queries/common-queries.js';
 import { DEFAULT_COORDS, BUSINESS_TYPES } from '../../config/constants.js';
 
 class BeautyPayload {
   build(keyword, display, start, adStart, coords = null) {
     const coordsToUse = coords || DEFAULT_COORDS;
-    
+
     return [
       {
-        operationName: "getBeautyList",
+        operationName: 'getBeautyList',
         variables: {
           useReverseGeocode: true,
           input: {
@@ -21,26 +21,26 @@ class BeautyPayload {
             filterOpening: false,
             filterBookingPromotion: false,
             naverBenefit: false,
-            sortingOrder: "precision",
+            sortingOrder: 'precision',
             x: coordsToUse.x,
             y: coordsToUse.y,
             bounds: coordsToUse.bounds,
-            deviceType: "pcmap",
+            deviceType: 'pcmap',
             bypassStyleClous: false,
-            ignoreQueryResult: false
+            ignoreQueryResult: false,
           },
           businessType: BUSINESS_TYPES.beauty,
           isNmap: true,
           isBounds: true,
           reverseGeocodingInput: {
             x: coordsToUse.clientX,
-            y: coordsToUse.clientY
-          }
+            y: coordsToUse.clientY,
+          },
         },
-        query: BeautyQueries.getBeautyList()
+        query: BeautyQueries.getBeautyList(),
       },
       {
-        operationName: "getAdBusinessList",
+        operationName: 'getAdBusinessList',
         variables: {
           input: {
             query: keyword,
@@ -48,14 +48,16 @@ class BeautyPayload {
             x: coordsToUse.x,
             y: coordsToUse.y,
             businessType: BUSINESS_TYPES.beauty,
-            deviceType: "pcmap",
-            localQueryString: `pr=place_pcmap&version=2.0.0&pr=place&start=1&display=${display}&q=${encodeURIComponent(keyword)}`,
-            bypassStyleClous: false
+            deviceType: 'pcmap',
+            localQueryString: `pr=place_pcmap&version=2.0.0&pr=place&start=1&display=${display}&q=${encodeURIComponent(
+              keyword
+            )}`,
+            bypassStyleClous: false,
           },
-          isNmap: true
+          isNmap: true,
         },
-        query: CommonQueries.getAdBusinessListQuery()
-      }
+        query: CommonQueries.getAdBusinessListQuery(),
+      },
     ];
   }
 }

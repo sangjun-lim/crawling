@@ -1,4 +1,4 @@
-class AntiDetectionUtils {
+class AntiDetectionService {
   constructor() {
     this.userAgents = [
       // Chrome - 다양한 버전
@@ -276,4 +276,4 @@ class AntiDetectionUtils {
   }
 }
 
-export default AntiDetectionUtils;
+export default AntiDetectionService;

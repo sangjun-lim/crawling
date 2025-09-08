@@ -1,17 +1,23 @@
-import BaseScraper from './BaseScraper.js';
 import { chromium } from 'playwright';
+import LoggerService from '../../services/logger-service.js';
+import ProxyService from '../../services/proxy-service.js';
+import StorageService from '../../services/storage-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 
-class NaverSmartStoreScraper extends BaseScraper {
+class NaverSmartStoreScraper {
   constructor(options = {}) {
-    super(options);
-    
+    // 서비스 조합 (Composition 패턴)
+    this.logger = new LoggerService(options);
+    this.proxyService = new ProxyService(options);
+    this.storageService = new StorageService(options);
+
     this.options = {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 500,
       saveData: options.saveData ?? true,
+      enableLogging: options.enableLogging ?? true,
       ...options,
     };
 
@@ -25,7 +31,7 @@ class NaverSmartStoreScraper extends BaseScraper {
     try {
       // 부모 클래스 초기화 (프록시 테스트 포함)
       await super.init();
-      
+
       this.logInfo('Playwright 브라우저 초기화 중...');
 
       const launchOptions = {
@@ -125,7 +131,9 @@ class NaverSmartStoreScraper extends BaseScraper {
       await this.init();
     }
 
-    console.log(`🔍 검색을 통한 상품 크롤링 시작: ${storeId} / 검색어: ${productId}`);
+    console.log(
+      `🔍 검색을 통한 상품 크롤링 시작: ${storeId} / 검색어: ${productId}`
+    );
 
     try {
       // 1단계: 스토어 메인페이지 접속
@@ -139,23 +147,25 @@ class NaverSmartStoreScraper extends BaseScraper {
 
       // 1단계: 스토어 검색 페이지 접속
       console.log('2️⃣ 스토어 검색 페이지 접속 중...');
-      const searchUrl = `https://smartstore.naver.com/${storeId}/search?q=${encodeURIComponent(productId)}`;
-      
+      const searchUrl = `https://smartstore.naver.com/${storeId}/search?q=${encodeURIComponent(
+        productId
+      )}`;
+
       await this.page.goto(searchUrl, {
         waitUntil: 'domcontentloaded',
         timeout: this.options.timeout,
       });
 
       let productClicked = false;
-      
-      await this.page.waitForSelector( `a[href*="/products/${productId}"]`, { timeout: 10000 });
+
+      await this.page.waitForSelector(`a[href*="/products/${productId}"]`, {
+        timeout: 10000,
+      });
 
       // 2단계: 첫 번째 검색 결과 클릭
       console.log('2️⃣ 검색 결과에서 첫 번째 상품 클릭...');
-      
-      const productSelectors = [
-        `a[href*="/products/${productId}"]`,
-      ];
+
+      const productSelectors = [`a[href*="/products/${productId}"]`];
 
       for (const selector of productSelectors) {
         try {
@@ -225,16 +235,18 @@ class NaverSmartStoreScraper extends BaseScraper {
     }
   }
 
-/**
- * 검색 기반 상품 스크래핑
- */
+  /**
+   * 검색 기반 상품 스크래핑
+   */
   async scrapeProductsBySearch(productUrl) {
     try {
       const splitUrl = productUrl.split('/');
       const storeId = splitUrl[3];
       const productId = splitUrl[5];
 
-      console.log(`네이버 스마트스토어 검색 기반 상품 수집 시작: ${storeId} / 검색어: ${productId}`);
+      console.log(
+        `네이버 스마트스토어 검색 기반 상품 수집 시작: ${storeId} / 검색어: ${productId}`
+      );
 
       // Playwright 초기화
       const initialized = await this.init();
@@ -259,7 +271,7 @@ class NaverSmartStoreScraper extends BaseScraper {
       await this.close();
     }
   }
-  
+
   /**
    * 스토어 메인페이지를 통해 특정 상품에 접근
    */
@@ -529,7 +541,9 @@ class NaverSmartStoreScraper extends BaseScraper {
         };
       });
 
-      console.log(`HTML fallback 데이터 추출 완료: ${productInfo.name || 'Unknown'}`);
+      console.log(
+        `HTML fallback 데이터 추출 완료: ${productInfo.name || 'Unknown'}`
+      );
       return productInfo;
     } catch (error) {
       console.error('HTML fallback 데이터 추출 실패:', error.message);
@@ -551,7 +565,11 @@ class NaverSmartStoreScraper extends BaseScraper {
         await fsPromises.mkdir(resultDir, { recursive: true });
       }
 
-      await fsPromises.writeFile(filename, JSON.stringify(data, null, 2), 'utf8');
+      await fsPromises.writeFile(
+        filename,
+        JSON.stringify(data, null, 2),
+        'utf8'
+      );
       console.log(`💾 데이터 저장: ${filename}`);
 
       // 요약 정보 출력
@@ -644,7 +662,7 @@ class NaverSmartStoreScraper extends BaseScraper {
         this.browser = null;
       }
       this.logSuccess('Playwright 브라우저 종료 완료');
-      
+
       // 부모 클래스 정리 호출
       await super.close();
     } catch (error) {

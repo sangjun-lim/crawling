@@ -1,5 +1,5 @@
-import HttpClient from './HttpClient.js';
-import LogUtils from '../utils/LogUtils.js';
+import HttpClient from '../../clients/http-client.js';
+import LogUtils from '../../services/logger-service.js';
 
 class CoupangVendorScraper {
   constructor(options = {}) {

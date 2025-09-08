@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-class CheckpointManager {
+class CheckpointService {
     constructor(options = {}) {
         this.checkpointDir = options.checkpointDir || 'checkpoints';
         this.ensureCheckpointDir();
@@ -199,4 +199,4 @@ class CheckpointManager {
     }
 }
 
-export default CheckpointManager;
+export default CheckpointService;

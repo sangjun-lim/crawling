@@ -1,11 +1,11 @@
 // 환경별 .env 파일 로딩
 import dotenv from 'dotenv';
-import NaverStoreScraper from './src/scrapers/naver/naverStoreScraper.js';
-import NaverSmartStoreScraper from './src/scrapers/naver/naverSmartStoreScraper.js';
-import CoupangVendorScraper from './src/scrapers/coupang/vendorScraper.js';
-import CoupangProductListScraper from './src/scrapers/coupang/productListScraper.js';
-import CoupangCombinedScraper from './src/scrapers/coupang/combinedScraper.js';
-import CoupangDataStorage from './src/services/coupangDataStorage.js';
+import NaverStoreScraper from './src/scrapers/naver/naver-store-scraper.js';
+import NaverSmartStoreScraper from './src/scrapers/naver/naver-smart-store-scraper.js';
+import CoupangVendorScraper from './src/scrapers/coupang/vendor-scraper.js';
+import CoupangProductListScraper from './src/scrapers/coupang/product-list-scraper.js';
+import CoupangCombinedScraper from './src/scrapers/coupang/combined-scraper.js';
+import CoupangStorageService from './src/services/coupang-storage-service.js';
 
 const env = process.env.NODE_ENV || 'development';
 
@@ -171,7 +171,7 @@ async function main() {
       const maxPages = parseInt(process.argv[5]) || 5; // 상품용 페이지 수
       const storeId = 0; // 항상 0으로 고정
 
-      const storage = new CoupangDataStorage({ storageType: 'csv' });
+      const storage = new CoupangStorageService({ storageType: 'csv' });
 
       if (subMode === 'vendor') {
         console.log(`벤더 정보 수집 모드`);
@@ -465,7 +465,7 @@ async function main() {
 // ES 모듈에서 직접 실행 확인
 import { fileURLToPath } from 'url';
 import path from 'path';
-import NaverShoppingRealBrowserScraper from './src/scrapers/naver/naverShoppingBrowserScraper.js';
+import NaverShoppingRealBrowserScraper from './src/scrapers/naver/naver-shopping-real-browser-scraper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

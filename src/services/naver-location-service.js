@@ -1,7 +1,34 @@
+import categoryKeywords from '../config/categories.js';
 import { COORDINATE_BOUNDS, API_URLS } from '../config/constants.js';
 
-class CoordinateUtils {
-  static calculateBounds(x, y) {
+class NaverLocationService {
+  constructor() {
+    this.categoryKeywords = categoryKeywords;
+  }
+
+  /**
+   * 검색어를 분석하여 적절한 비즈니스 카테고리를 감지
+   * @param {string} keyword - 검색 키워드
+   * @returns {string} 감지된 카테고리 (restaurant, hospital, beauty, accommodation, place)
+   */
+  detectCategory(keyword) {
+    for (const [category, keywords] of Object.entries(this.categoryKeywords)) {
+      if (keywords.some(kw => keyword.includes(kw))) {
+        console.log(`검색어 "${keyword}" → 카테고리: ${category}`);
+        return category;
+      }
+    }
+    console.log(`검색어 "${keyword}" → 카테고리: place (기본값)`);
+    return 'place';
+  }
+
+  /**
+   * 좌표 경계 계산
+   * @param {number} x - X 좌표
+   * @param {number} y - Y 좌표
+   * @returns {string} 경계 문자열 (minX;minY;maxX;maxY)
+   */
+  calculateBounds(x, y) {
     const radiusX = COORDINATE_BOUNDS.RADIUS_X;
     const radiusY = COORDINATE_BOUNDS.RADIUS_Y;
   
@@ -13,7 +40,13 @@ class CoordinateUtils {
     return `${minX};${minY};${maxX};${maxY}`;
   }
 
-  static async getLocationCoordinates(keyword, httpClient) {
+  /**
+   * 키워드를 통해 지역 좌표를 검색
+   * @param {string} keyword - 검색 키워드
+   * @param {HttpClient} httpClient - HTTP 클라이언트
+   * @returns {Object|null} 좌표 객체 또는 null
+   */
+  async getLocationCoordinates(keyword, httpClient) {
     try {
       console.log(`"${keyword}" 키워드로 지역 좌표 검색 중...`);
       
@@ -62,4 +95,4 @@ class CoordinateUtils {
   }
 }
 
-export default CoordinateUtils;
+export default NaverLocationService;
