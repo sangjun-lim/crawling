@@ -131,7 +131,6 @@ async function main() {
         headless: false,
         timeout: 30000,
         slowMo: 100,
-        saveData: true, // HTML 저장 활성화
       });
 
       try {

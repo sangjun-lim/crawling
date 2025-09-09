@@ -19,7 +19,6 @@ class NaverShoppingScraper {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 100,
-      saveData: options.saveData ?? true,
       enableLogging: options.enableLogging ?? true,
       ...options,
     };

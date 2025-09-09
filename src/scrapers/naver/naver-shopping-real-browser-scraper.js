@@ -2,7 +2,8 @@ import { connect } from 'puppeteer-real-browser';
 import LoggerService from '../../services/logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
 import StorageService from '../../services/storage-service.js';
-import NaverReceiptCaptchaSolver from '../../captcha/captcha-solver.js';
+import NaverReceiptCaptchaSolver from '../../captcha/naver-receipt-captcha-solver.js';
+import NaverShoppingNextDataParser from '../../parsers/naver/shopping-next-data-parser.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 
@@ -13,12 +14,12 @@ class NaverShoppingRealBrowserScraper {
     this.proxyService = new ProxyService(options);
     this.storageService = new StorageService(options);
     this.captchaSolver = new NaverReceiptCaptchaSolver(options);
+    this.dataParser = new NaverShoppingNextDataParser();
 
     this.options = {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 100,
-      saveData: options.saveData ?? true,
       enableLogging: options.enableLogging ?? true,
       ...options,
     };
@@ -592,28 +593,23 @@ class NaverShoppingRealBrowserScraper {
         this.logInfo('🔍 __NEXT_DATA__ JSON 데이터 파싱 시작...');
 
         try {
-          // 1. JSON 데이터 추출
-          const nextData = this.extractNextDataFromHtml(htmlContent);
-
-          // 2. 상품 정보 파싱
-          const productInfo = this.parseProductInfo(nextData);
-
-          // 3. 카테고리 정보 파싱
-          const categoryInfo = this.parseCategoryInfo(nextData);
-
-          // 4. 판매처별 상품 정보 파싱
-          const catalogProducts = this.parseCatalogProducts(nextData);
-
-          // 5. 파싱된 데이터를 JSON 파일로 저장
-          const dataFilePath = await this.saveProductData(
-            productInfo,
-            categoryInfo,
-            catalogProducts,
+          // 파서를 사용하여 모든 데이터 파싱
+          const parseResult = this.dataParser.parseAllDataFromHtml(
+            htmlContent,
             productId
           );
-          this.logInfo(`📄 데이터 JSON 파일 저장됨: ${dataFilePath}`);
 
-          this.logSuccess('🎉 데이터 파싱 및 저장 완료!');
+          if (parseResult.success) {
+            // 파싱된 데이터를 JSON 파일로 저장
+            const dataFilePath = await this.saveProductData(
+              parseResult.data,
+              productId
+            );
+            this.logInfo(`📄 데이터 JSON 파일 저장됨: ${dataFilePath}`);
+            this.logSuccess('🎉 데이터 파싱 및 저장 완료!');
+          } else {
+            throw new Error(parseResult.error);
+          }
         } catch (parseError) {
           this.logError(`데이터 파싱 실패: ${parseError.message}`);
           this.logInfo('⚠️ HTML은 저장되었으나 데이터 파싱에 실패했습니다');
@@ -661,127 +657,9 @@ class NaverShoppingRealBrowserScraper {
   }
 
   /**
-   * HTML에서 __NEXT_DATA__ JSON 데이터 추출
+   * 파싱된 데이터를 JSON 파일로 저장 (간소화됨)
    */
-  extractNextDataFromHtml(htmlContent) {
-    try {
-      // <script id="__NEXT_DATA__" type="application/json"> 태그 찾기
-      const scriptRegex =
-        /<script\s+id="__NEXT_DATA__"\s+type="application\/json"[^>]*>(.*?)<\/script>/s;
-      const match = htmlContent.match(scriptRegex);
-
-      if (!match || !match[1]) {
-        throw new Error('__NEXT_DATA__ script 태그를 찾을 수 없습니다');
-      }
-
-      const jsonString = match[1].trim();
-      const nextData = JSON.parse(jsonString);
-
-      this.logSuccess('__NEXT_DATA__ JSON 데이터 추출 완료');
-      return nextData;
-    } catch (error) {
-      this.logError(`__NEXT_DATA__ 추출 실패: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * 상품 정보 파싱
-   */
-  parseProductInfo(nextData) {
-    try {
-      const productInfo =
-        nextData.props?.pageProps?.initialState?.catalog?.info;
-
-      if (!productInfo) {
-        throw new Error(
-          '상품 정보를 찾을 수 없습니다 (props.pageProps.initialState.info)'
-        );
-      }
-
-      this.logSuccess('상품 정보 파싱 완료');
-      return productInfo;
-    } catch (error) {
-      this.logError(`상품 정보 파싱 실패: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * 카테고리 정보 파싱
-   */
-  parseCategoryInfo(nextData) {
-    try {
-      const categoryInfo =
-        nextData.props?.pageProps?.initialState?.catalog?.category;
-
-      if (!categoryInfo) {
-        throw new Error(
-          '카테고리 정보를 찾을 수 없습니다 (props.pageProps.initialState.category)'
-        );
-      }
-
-      this.logSuccess('카테고리 정보 파싱 완료');
-      return categoryInfo;
-    } catch (error) {
-      this.logError(`카테고리 정보 파싱 실패: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * 판매처별 상품 및 가격 정보 파싱
-   */
-  parseCatalogProducts(nextData) {
-    try {
-      const queries = nextData.props?.pageProps?.dehydratedState?.queries;
-
-      if (!queries || !Array.isArray(queries)) {
-        throw new Error('queries 배열을 찾을 수 없습니다');
-      }
-
-      // queryKey 배열의 첫번째 값이 "CatalogProducts"인 객체 찾기
-      const catalogQuery = queries.find((query) => {
-        return (
-          query.queryKey &&
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0] === 'CatalogProducts'
-        );
-      });
-
-      if (!catalogQuery) {
-        throw new Error(
-          'CatalogProducts queryKey를 가진 객체를 찾을 수 없습니다'
-        );
-      }
-
-      const products = catalogQuery.state?.data?.Catalog_Products?.products;
-
-      if (!products || !Array.isArray(products)) {
-        throw new Error(
-          '상품 목록을 찾을 수 없습니다 (state.data.Catalog_Products.products)'
-        );
-      }
-
-      this.logSuccess(
-        `판매처별 상품 정보 파싱 완료 (${products.length}개 상품)`
-      );
-      return products;
-    } catch (error) {
-      this.logError(`판매처별 상품 정보 파싱 실패: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * 파싱된 데이터를 JSON 파일로 저장
-   */
-  async saveProductData(
-    productInfo,
-    categoryInfo,
-    catalogProducts,
-    productId = null
-  ) {
+  async saveProductData(productData, productId = null) {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const productIdStr = productId ? `_${productId}` : '';
@@ -794,22 +672,6 @@ class NaverShoppingRealBrowserScraper {
         this.logInfo('📁 result 디렉토리 생성됨');
       }
 
-      const productData = {
-        metadata: {
-          productId: productId || 'Unknown',
-          extractedAt: new Date().toISOString(),
-          extractor: 'NaverShoppingRealBrowserScraper',
-        },
-        productInfo: productInfo,
-        categoryInfo: categoryInfo,
-        catalogProducts: catalogProducts,
-        summary: {
-          productInfoAvailable: !!productInfo,
-          categoryInfoAvailable: !!categoryInfo,
-          catalogProductsCount: catalogProducts ? catalogProducts.length : 0,
-        },
-      };
-
       await fsPromises.writeFile(
         filename,
         JSON.stringify(productData, null, 2),
@@ -821,17 +683,27 @@ class NaverShoppingRealBrowserScraper {
       const stats = await fsPromises.stat(filename);
       this.logInfo(`📊 저장된 파일 크기: ${(stats.size / 1024).toFixed(2)} KB`);
 
-      // 간단한 요약 정보 출력
-      this.logInfo('=== 추출된 데이터 요약 ===');
-      this.logInfo(`📦 상품 정보: ${productInfo ? '✅ 추출됨' : '❌ 없음'}`);
-      this.logInfo(
-        `📂 카테고리 정보: ${categoryInfo ? '✅ 추출됨' : '❌ 없음'}`
-      );
-      this.logInfo(
-        `🏪 판매처별 상품: ${
-          catalogProducts ? `✅ ${catalogProducts.length}개` : '❌ 없음'
-        }`
-      );
+      // 간단한 요약 정보 출력 (파서의 summary 사용)
+      if (productData.summary) {
+        this.logInfo('=== 추출된 데이터 요약 ===');
+        this.logInfo(
+          `📦 상품 정보: ${
+            productData.summary.productInfoAvailable ? '✅ 추출됨' : '❌ 없음'
+          }`
+        );
+        this.logInfo(
+          `📂 카테고리 정보: ${
+            productData.summary.categoryInfoAvailable ? '✅ 추출됨' : '❌ 없음'
+          }`
+        );
+        this.logInfo(
+          `🏪 판매처별 상품: ${
+            productData.summary.catalogProductsCount > 0
+              ? `✅ ${productData.summary.catalogProductsCount}개`
+              : '❌ 없음'
+          }`
+        );
+      }
 
       return filename;
     } catch (error) {
@@ -856,17 +728,11 @@ class NaverShoppingRealBrowserScraper {
         this.logInfo('📁 result 디렉토리 생성됨');
       }
 
-      // HTML 내용에 메타데이터 추가
-      const metaComment = `<!--
-=== 네이버 상품 페이지 HTML ===
-상품 ID: ${productId || 'Unknown'}
-수집 시간: ${new Date().toISOString()}
-파일 크기: ${htmlContent.length.toLocaleString()} 문자
-수집 도구: NaverShoppingScraper
--->
-`;
-
-      const htmlWithMeta = metaComment + htmlContent;
+      // 파서를 사용하여 HTML 메타데이터 추가
+      const htmlWithMeta = this.dataParser.addHtmlMetadata(
+        htmlContent,
+        productId
+      );
 
       await fsPromises.writeFile(filename, htmlWithMeta, 'utf8');
       this.logSuccess(`상품 HTML 파일 저장 완료: ${filename}`);

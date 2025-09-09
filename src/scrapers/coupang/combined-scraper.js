@@ -248,10 +248,6 @@ class CoupangCombinedScraper {
           vendorId,
           storeId: vendorResult.storeId,
           수집시간: vendorResult.timestamp,
-          상품명: '',
-          상품링크: '',
-          상품ID: '',
-          상품수집시간: '',
         });
       } else {
         console.log(`✅ 상품 수집 성공: ${vendorId} - ${products.length}개`);
@@ -565,12 +561,12 @@ class CoupangCombinedScraper {
 
       // 배치 파일 정리 (옵션)
       if (options.cleanupBatches !== false) {
-        await this.storage.cleanupBatches(sessionId, false);
+        // await this.storage.cleanupBatches(sessionId, false);
       }
 
       // 체크포인트 정리 (옵션)
       if (options.cleanupCheckpoint !== false) {
-        await this.checkpointManager.deleteCheckpoint(sessionId);
+        // await this.checkpointManager.deleteCheckpoint(sessionId);
       }
 
       console.log(`✅ 세션 완료: ${mergedFile}`);

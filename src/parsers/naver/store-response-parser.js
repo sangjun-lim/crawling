@@ -1,4 +1,4 @@
-import StorageService from '../services/storage-service.js';
+import StorageService from '../../services/storage-service.js';
 
 class NaverStoreResponseParser {
   parseStoresFromGraphQLResponse(responseData, page = 1) {

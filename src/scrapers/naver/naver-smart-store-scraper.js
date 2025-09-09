@@ -16,7 +16,6 @@ class NaverSmartStoreScraper {
       headless: options.headless ?? true,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 500,
-      saveData: options.saveData ?? true,
       enableLogging: options.enableLogging ?? true,
       ...options,
     };
@@ -633,7 +632,7 @@ class NaverSmartStoreScraper {
       const productData = await this.crawlProduct(storeId, productId);
 
       // 결과 저장
-      if (productData && this.options.saveData) {
+      if (productData) {
         await this.saveData(productData, productId);
       }
 
