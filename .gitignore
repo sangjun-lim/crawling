@@ -22,6 +22,7 @@ temp/
 tmp/
 *.tmp
 checkpoints/
+archive/
 
 # 백업 파일들
 *.bak
