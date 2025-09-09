@@ -654,8 +654,9 @@ class NaverShoppingRealBrowserScraper {
       // 에러 시 스크린샷 저장
       if (this.page) {
         try {
+          fs.mkdir('error-page', { recursive: true });
           await this.page.screenshot({
-            path: `error-scenario-${Date.now()}.png`,
+            path: `error-page/error-scenario-${Date.now()}.png`,
             fullPage: true,
           });
           this.logger.logInfo('에러 스크린샷 저장됨');

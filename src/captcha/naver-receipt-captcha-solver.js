@@ -210,6 +210,8 @@ class NaverReceiptCaptchaSolver {
     try {
       this.logger.logInfo('🤖 Gemini API로 이미지 분석 시작...');
 
+      const startTime = Date.now();
+
       const model = client.getGenerativeModel({
         model: this.options.geminiModel,
       });
@@ -225,6 +227,13 @@ class NaverReceiptCaptchaSolver {
         }, this.options.apiTimeout);
       });
 
+      const progressInterval = setInterval(() => {
+        const elapsedTime = Date.now() - startTime;
+        this.logger.logInfo(
+          `⏳ Gemini API 응답 대기 중... (${elapsedTime}ms 경과)`
+        );
+      }, 5000);
+
       const analysisPromise = model.generateContent([
         {
           inlineData: {
@@ -237,6 +246,8 @@ class NaverReceiptCaptchaSolver {
 
       // Promise.race로 타임아웃과 API 호출 중 먼저 완료되는 것 반환
       const result = await Promise.race([analysisPromise, timeoutPromise]);
+
+      clearInterval(progressInterval);
 
       const response = result.response;
       const answer = response.text().trim();
