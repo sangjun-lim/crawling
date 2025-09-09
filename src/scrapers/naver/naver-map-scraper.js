@@ -2,7 +2,7 @@ import HttpClient from '../../clients/http-client.js';
 import NaverMapService from '../../services/naver-map-service.js';
 import GraphqlBuilder from '../../graphql/graphql-builder.js';
 import NaverMapResponseParser from '../../parsers/naver/map-response-parser.js';
-import LoggerService from '../../services/logger-service.js';
+import HttpRequestLoggerService from '../../services/http-request-logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
 import {
   DEFAULT_COORDS,
@@ -13,7 +13,7 @@ import {
 class NaverMapScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
-    this.logger = new LoggerService(options);
+    this.logger = new HttpRequestLoggerService(options);
     this.proxyService = new ProxyService(options);
     this.naverMapService = new NaverMapService(options);
 

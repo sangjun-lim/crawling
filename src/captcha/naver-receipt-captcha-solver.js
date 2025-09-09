@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import LoggerService from '../services/logger-service.js';
+import LogUtils from '../utils/log-utils.js';
 
 /**
  * 네이버 쇼핑 영수증 CAPTCHA 자동 해결 클래스
@@ -7,7 +7,7 @@ import LoggerService from '../services/logger-service.js';
  */
 class NaverReceiptCaptchaSolver {
   constructor(options = {}) {
-    this.logger = new LoggerService(options);
+    this.logger = new LogUtils(options);
     this.options = {
       maxAttempts: options.maxAttempts || 5,
       retryDelayMs: options.retryDelayMs || 5200,
@@ -56,7 +56,7 @@ class NaverReceiptCaptchaSolver {
         captchaElements.hasAnswer
       );
     } catch (error) {
-      this.logError(`캡차 페이지 확인 실패: ${error.message}`);
+      this.logger.logError(`캡차 페이지 확인 실패: ${error.message}`);
       return false;
     }
   }
@@ -71,7 +71,7 @@ class NaverReceiptCaptchaSolver {
       const imageUrl = await page.$eval('#rcpt_img', (img) => img.src);
       return imageUrl;
     } catch (error) {
-      this.logError(`캡차 이미지 URL 추출 실패: ${error.message}`);
+      this.logger.logError(`캡차 이미지 URL 추출 실패: ${error.message}`);
       return null;
     }
   }
@@ -86,10 +86,10 @@ class NaverReceiptCaptchaSolver {
       const questionText = await page.$eval('#rcpt_info', (p) =>
         p.textContent.trim()
       );
-      this.logInfo(`✅ 캡차 질문 텍스트 추출: ${questionText}`);
+      this.logger.logInfo(`✅ 캡차 질문 텍스트 추출: ${questionText}`);
       return questionText;
     } catch (error) {
-      this.logError(`캡차 질문 텍스트 추출 실패: ${error.message}`);
+      this.logger.logError(`캡차 질문 텍스트 추출 실패: ${error.message}`);
       return null;
     }
   }
@@ -122,12 +122,12 @@ class NaverReceiptCaptchaSolver {
         }
       }, imageUrl);
 
-      this.logInfo(
+      this.logger.logInfo(
         `✅ 이미지 Base64 변환 완료 (크기: ${base64Data.length} 문자)`
       );
       return base64Data;
     } catch (error) {
-      this.logError(`이미지 Base64 변환 실패: ${error.message}`);
+      this.logger.logError(`이미지 Base64 변환 실패: ${error.message}`);
       return null;
     }
   }
@@ -146,10 +146,12 @@ class NaverReceiptCaptchaSolver {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      this.logInfo('✅ Gemini API 클라이언트 초기화 완료');
+      this.logger.logInfo('✅ Gemini API 클라이언트 초기화 완료');
       return genAI;
     } catch (error) {
-      this.logError(`Gemini API 클라이언트 초기화 실패: ${error.message}`);
+      this.logger.logError(
+        `Gemini API 클라이언트 초기화 실패: ${error.message}`
+      );
       return null;
     }
   }
@@ -193,7 +195,7 @@ class NaverReceiptCaptchaSolver {
 ---
 * '실제 질문': ${questionText}`;
 
-    this.logInfo('✅ 캡차 해결 프롬프트 생성 완료');
+    this.logger.logInfo('✅ 캡차 해결 프롬프트 생성 완료');
     return prompt;
   }
 
@@ -206,7 +208,7 @@ class NaverReceiptCaptchaSolver {
    */
   async analyzeImageWithGemini(client, base64Image, prompt) {
     try {
-      this.logInfo('🤖 Gemini API로 이미지 분석 시작...');
+      this.logger.logInfo('🤖 Gemini API로 이미지 분석 시작...');
 
       const model = client.getGenerativeModel({
         model: this.options.geminiModel,
@@ -239,10 +241,10 @@ class NaverReceiptCaptchaSolver {
       const response = result.response;
       const answer = response.text().trim();
 
-      this.logInfo(`🎯 Gemini API 분석 완료: "${answer}"`);
+      this.logger.logInfo(`🎯 Gemini API 분석 완료: "${answer}"`);
       return answer;
     } catch (error) {
-      this.logError(`Gemini API 이미지 분석 실패: ${error.message}`);
+      this.logger.logError(`Gemini API 이미지 분석 실패: ${error.message}`);
       return null;
     }
   }
@@ -267,7 +269,7 @@ class NaverReceiptCaptchaSolver {
         try {
           const element = await page.$(selector);
           if (element) {
-            this.logInfo(`✅ 캡차 입력 필드 발견: ${selector}`);
+            this.logger.logInfo(`✅ 캡차 입력 필드 발견: ${selector}`);
             return element;
           }
         } catch (error) {
@@ -277,7 +279,7 @@ class NaverReceiptCaptchaSolver {
 
       throw new Error('캡차 입력 필드를 찾을 수 없습니다');
     } catch (error) {
-      this.logError(`캡차 입력 필드 찾기 실패: ${error.message}`);
+      this.logger.logError(`캡차 입력 필드 찾기 실패: ${error.message}`);
       return null;
     }
   }
@@ -291,7 +293,7 @@ class NaverReceiptCaptchaSolver {
    */
   async inputCaptchaAnswer(page, inputElement, answer) {
     try {
-      this.logInfo(`📝 캡차 답변 입력 중: "${answer}"`);
+      this.logger.logInfo(`📝 캡차 답변 입력 중: "${answer}"`);
 
       // 기존 값 지우기
       await inputElement.evaluate((input) => (input.value = ''));
@@ -304,7 +306,7 @@ class NaverReceiptCaptchaSolver {
       // 입력된 값 확인
       const inputValue = await inputElement.evaluate((input) => input.value);
       if (inputValue === answer) {
-        this.logSuccess(`✅ 캡차 답변 입력 완료: "${inputValue}"`);
+        this.logger.logSuccess(`✅ 캡차 답변 입력 완료: "${inputValue}"`);
         return true;
       } else {
         throw new Error(
@@ -312,7 +314,7 @@ class NaverReceiptCaptchaSolver {
         );
       }
     } catch (error) {
-      this.logError(`캡차 답변 입력 실패: ${error.message}`);
+      this.logger.logError(`캡차 답변 입력 실패: ${error.message}`);
       return false;
     }
   }
@@ -328,7 +330,7 @@ class NaverReceiptCaptchaSolver {
       const primarySelector = '#cpt_confirm';
       const element = await page.$(primarySelector);
       if (element) {
-        this.logInfo(`✅ 캡차 제출 버튼 발견: ${primarySelector}`);
+        this.logger.logInfo(`✅ 캡차 제출 버튼 발견: ${primarySelector}`);
         return element;
       }
 
@@ -347,7 +349,7 @@ class NaverReceiptCaptchaSolver {
         try {
           const backupElement = await page.$(selector);
           if (backupElement) {
-            this.logInfo(`✅ 백업 캡차 제출 버튼 발견: ${selector}`);
+            this.logger.logInfo(`✅ 백업 캡차 제출 버튼 발견: ${selector}`);
             return backupElement;
           }
         } catch (error) {
@@ -357,7 +359,7 @@ class NaverReceiptCaptchaSolver {
 
       throw new Error('캡차 제출 버튼을 찾을 수 없습니다');
     } catch (error) {
-      this.logError(`캡차 제출 버튼 찾기 실패: ${error.message}`);
+      this.logger.logError(`캡차 제출 버튼 찾기 실패: ${error.message}`);
       return null;
     }
   }
@@ -370,7 +372,7 @@ class NaverReceiptCaptchaSolver {
    */
   async submitCaptcha(page, submitButton) {
     try {
-      this.logInfo('🚀 캡차 제출 중...');
+      this.logger.logInfo('🚀 캡차 제출 중...');
 
       // 버튼 클릭
       await submitButton.click();
@@ -378,10 +380,10 @@ class NaverReceiptCaptchaSolver {
       // 클릭 후 약간의 대기
       await this.randomWait(500, 1000);
 
-      this.logSuccess('✅ 캡차 제출 완료');
+      this.logger.logSuccess('✅ 캡차 제출 완료');
       return { success: true };
     } catch (error) {
-      this.logError(`캡차 제출 실패: ${error.message}`);
+      this.logger.logError(`캡차 제출 실패: ${error.message}`);
       return { success: false };
     }
   }
@@ -458,32 +460,32 @@ class NaverReceiptCaptchaSolver {
 
       // 오류 메시지가 있으면 처리
       if (errorMessage) {
-        this.logError(`❌ 오류 메시지 감지: ${errorMessage}`);
+        this.logger.logError(`❌ 오류 메시지 감지: ${errorMessage}`);
 
         // 형식 오류인 경우 새로고침 버튼 클릭
         if (errorMessage.includes('형식에 맞지 않는 문자가 입력되었습니다')) {
-          this.logInfo('🔄 형식 오류 감지 - 캡차 새로고침 시도');
+          this.logger.logInfo('🔄 형식 오류 감지 - 캡차 새로고침 시도');
 
           try {
             // 새로고침 버튼 찾기
             const reloadButton = await page.$('#rcpt_reload');
             if (reloadButton) {
-              this.logInfo('✅ 캡차 새로고침 버튼 발견 - 클릭 중...');
+              this.logger.logInfo('✅ 캡차 새로고침 버튼 발견 - 클릭 중...');
               await reloadButton.click();
 
               // 새로고침 후 대기
               await this.randomWait(2000, 3000);
 
-              this.logSuccess(
+              this.logger.logSuccess(
                 '🔄 캡차 새로고침 완료 - 새로운 캡차로 다시 시도'
               );
               // 새로고침했으므로 실패로 반환하여 다시 시도하게 함
               return false;
             } else {
-              this.logError('⚠️ 캡차 새로고침 버튼을 찾을 수 없음');
+              this.logger.logError('⚠️ 캡차 새로고침 버튼을 찾을 수 없음');
             }
           } catch (reloadError) {
-            this.logError(`캡차 새로고침 실패: ${reloadError.message}`);
+            this.logger.logError(`캡차 새로고침 실패: ${reloadError.message}`);
           }
         }
 
@@ -494,10 +496,10 @@ class NaverReceiptCaptchaSolver {
       const stillCaptchaPage = await this.isCaptchaPage(page);
 
       if (!stillCaptchaPage) {
-        this.logSuccess('🎉 캡차 해결 성공! (캡차 페이지를 벗어남)');
+        this.logger.logSuccess('🎉 캡차 해결 성공! (캡차 페이지를 벗어남)');
         return true;
       } else {
-        this.logInfo(
+        this.logger.logInfo(
           '⚠️ 여전히 캡차 페이지에 머물러 있음 - 답변이 틀렸거나 처리 중'
         );
 
@@ -506,15 +508,17 @@ class NaverReceiptCaptchaSolver {
 
         const finalCheck = await this.isCaptchaPage(page);
         if (!finalCheck) {
-          this.logSuccess('🎉 캡차 해결 성공! (추가 대기 후 확인)');
+          this.logger.logSuccess('🎉 캡차 해결 성공! (추가 대기 후 확인)');
           return true;
         } else {
-          this.logError('❌ 캡차 해결 실패 - 여전히 캡차 페이지에 머물러 있음');
+          this.logger.logError(
+            '❌ 캡차 해결 실패 - 여전히 캡차 페이지에 머물러 있음'
+          );
           return false;
         }
       }
     } catch (error) {
-      this.logError(`캡차 해결 확인 실패: ${error.message}`);
+      this.logger.logError(`캡차 해결 확인 실패: ${error.message}`);
       return false;
     }
   }
@@ -526,12 +530,12 @@ class NaverReceiptCaptchaSolver {
    */
   async attemptCaptchaSolve(page) {
     try {
-      this.logInfo('🎯 캡차 해결 시도 시작...');
+      this.logger.logInfo('🎯 캡차 해결 시도 시작...');
 
       // 1. 캡차 페이지 확인
       const isCaptcha = await this.isCaptchaPage(page);
       if (!isCaptcha) {
-        this.logInfo('ℹ️ 캡차 페이지가 아닙니다');
+        this.logger.logInfo('ℹ️ 캡차 페이지가 아닙니다');
         return true;
       }
 
@@ -596,7 +600,7 @@ class NaverReceiptCaptchaSolver {
       const solved = await this.isCaptchaSolved(page);
       return solved;
     } catch (error) {
-      this.logError(`캡차 해결 시도 실패: ${error.message}`);
+      this.logger.logError(`캡차 해결 시도 실패: ${error.message}`);
       return false;
     }
   }
@@ -612,36 +616,36 @@ class NaverReceiptCaptchaSolver {
     const attempts = maxAttempts || this.options.maxAttempts;
     const delay = delayMs || this.options.retryDelayMs;
 
-    this.logInfo(`🎲 캡차 자동 해결 시작 (최대 ${attempts}회 시도)`);
+    this.logger.logInfo(`🎲 캡차 자동 해결 시작 (최대 ${attempts}회 시도)`);
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
-      this.logInfo(`📍 시도 ${attempt}/${attempts}`);
+      this.logger.logInfo(`📍 시도 ${attempt}/${attempts}`);
 
       try {
         const success = await this.attemptCaptchaSolve(page);
 
         if (success) {
-          this.logSuccess(`🎉 캡차 해결 성공! (${attempt}회 시도)`);
+          this.logger.logSuccess(`🎉 캡차 해결 성공! (${attempt}회 시도)`);
           return true;
         } else {
-          this.logInfo(`❌ 시도 ${attempt} 실패`);
+          this.logger.logInfo(`❌ 시도 ${attempt} 실패`);
 
           if (attempt < attempts) {
-            this.logInfo(`⏳ ${delay / 1000}초 대기 후 재시도...`);
+            this.logger.logInfo(`⏳ ${delay / 1000}초 대기 후 재시도...`);
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
         }
       } catch (error) {
-        this.logError(`시도 ${attempt} 에러: ${error.message}`);
+        this.logger.logError(`시도 ${attempt} 에러: ${error.message}`);
 
         if (attempt < attempts) {
-          this.logInfo(`⏳ ${delay / 1000}초 대기 후 재시도...`);
+          this.logger.logInfo(`⏳ ${delay / 1000}초 대기 후 재시도...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    this.logError(`💥 캡차 해결 실패 (${attempts}회 모든 시도 실패)`);
+    this.logger.logError(`💥 캡차 해결 실패 (${attempts}회 모든 시도 실패)`);
     return false;
   }
 
@@ -651,20 +655,22 @@ class NaverReceiptCaptchaSolver {
    * @returns {Promise<{isCaptcha: boolean, autoSolved: boolean, imageUrl: string|null, question: string|null, error?: string}>} 캡챠 처리 결과
    */
   async handleCaptchaAutomatically(page) {
-    this.logInfo(`[Captcha Auto-Solve] 캡차 자동 감지 및 해결을 시작합니다...`);
+    this.logger.logInfo(
+      `[Captcha Auto-Solve] 캡차 자동 감지 및 해결을 시작합니다...`
+    );
 
     // 캡챠 페이지 확인 (한 번만)
     const isCaptcha = await this.isCaptchaPage(page);
 
     if (isCaptcha) {
-      this.logInfo('✅ 캡챠 페이지 감지 성공!');
+      this.logger.logInfo('✅ 캡챠 페이지 감지 성공!');
 
       // 🚀 자동 해결 시도
-      this.logInfo('🤖 캡차 자동 해결을 시도합니다...');
+      this.logger.logInfo('🤖 캡차 자동 해결을 시도합니다...');
       const autoSolved = await this.solveCaptchaWithRetry(page);
 
       if (autoSolved) {
-        this.logSuccess('🎉 캡차 자동 해결 성공!');
+        this.logger.logSuccess('🎉 캡차 자동 해결 성공!');
         return {
           isCaptcha: true,
           autoSolved: true,
@@ -672,7 +678,7 @@ class NaverReceiptCaptchaSolver {
           question: null,
         };
       } else {
-        this.logError('❌ 캡차 자동 해결 실패, 수동 처리 필요');
+        this.logger.logError('❌ 캡차 자동 해결 실패, 수동 처리 필요');
         return {
           isCaptcha: true,
           autoSolved: false,
@@ -682,7 +688,7 @@ class NaverReceiptCaptchaSolver {
         };
       }
     } else {
-      this.logInfo('ℹ️ 캡챠 페이지가 아닙니다');
+      this.logger.logInfo('ℹ️ 캡챠 페이지가 아닙니다');
       return {
         isCaptcha: false,
         autoSolved: false,
@@ -690,19 +696,6 @@ class NaverReceiptCaptchaSolver {
         question: null,
       };
     }
-  }
-
-  // 로거 메서드들 (LoggerService와 동일한 인터페이스 제공)
-  logInfo(message) {
-    this.logger.logInfo(message);
-  }
-
-  logSuccess(message) {
-    this.logger.logSuccess(message);
-  }
-
-  logError(message) {
-    this.logger.logError(message);
   }
 }
 

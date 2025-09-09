@@ -1,21 +1,21 @@
 import { connect } from 'puppeteer-real-browser';
-import LoggerService from '../../services/logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
 import NaverReceiptCaptchaSolver from '../../captcha/naver-receipt-captcha-solver.js';
 import NaverShoppingNextDataParser from '../../parsers/naver/shopping-next-data-parser.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
+import LogUtils from '../../utils/log-utils.js';
 
 class NaverShoppingRealBrowserScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
-    this.logger = new LoggerService(options);
+    this.logger = new LogUtils(options);
     this.proxyService = new ProxyService(options);
     this.captchaSolver = new NaverReceiptCaptchaSolver(options);
     this.dataParser = new NaverShoppingNextDataParser();
 
     this.options = {
-      headless: options.headless ?? true,
+      headless: options.headless ?? false,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 100,
       enableLogging: options.enableLogging ?? true,
@@ -33,9 +33,9 @@ class NaverShoppingRealBrowserScraper {
 
   async init() {
     try {
-      // 부모 클래스 초기화 (프록시 테스트 포함)
-      await super.init();
-      this.logInfo('puppeteer-real-browser를 사용하여 브라우저 연결 중...');
+      this.logger.logInfo(
+        'puppeteer-real-browser를 사용하여 브라우저 연결 중...'
+      );
 
       // puppeteer-real-browser 연결 설정
       const { browser, page } = await connect({
@@ -66,11 +66,13 @@ class NaverShoppingRealBrowserScraper {
       // 초기 페이지의 네트워크 모니터링 설정
       this.setupPageNetworkMonitoring(this.page);
 
-      this.logSuccess('puppeteer-real-browser 연결 완료');
+      this.logger.logSuccess('puppeteer-real-browser 연결 완료');
       return true;
     } catch (error) {
-      this.logError(`puppeteer-real-browser 연결 실패: ${error.message}`);
-      this.logError(`에러 스택: ${error.stack}`);
+      this.logger.logError(
+        `puppeteer-real-browser 연결 실패: ${error.message}`
+      );
+      this.logger.logError(`에러 스택: ${error.stack}`);
       return false;
     }
   }
@@ -79,7 +81,7 @@ class NaverShoppingRealBrowserScraper {
    * 모든 탭에서 발생하는 새로운 탭 생성 이벤트를 모니터링하고 네트워크 리스너를 자동 설정
    */
   setupGlobalNetworkMonitoring() {
-    this.logInfo('🌐 전역 네트워크 모니터링 설정 중...');
+    this.logger.logInfo('🌐 전역 네트워크 모니터링 설정 중...');
 
     this.browser.on('targetcreated', async (target) => {
       try {
@@ -88,14 +90,14 @@ class NaverShoppingRealBrowserScraper {
           const page = await target.page();
           if (page) {
             const url = page.url();
-            this.logInfo(`🆕 새 탭 생성 감지: ${url}`);
+            this.logger.logInfo(`🆕 새 탭 생성 감지: ${url}`);
 
             // 새 페이지에 네트워크 모니터링 설정
             this.setupPageNetworkMonitoring(page);
           }
         }
       } catch (error) {
-        this.logError(`새 탭 모니터링 설정 실패: ${error.message}`);
+        this.logger.logError(`새 탭 모니터링 설정 실패: ${error.message}`);
       }
     });
   }
@@ -106,7 +108,7 @@ class NaverShoppingRealBrowserScraper {
   setupPageNetworkMonitoring(page) {
     try {
       const pageUrl = page.url();
-      this.logInfo(`🔧 페이지 네트워크 모니터링 설정: ${pageUrl}`);
+      this.logger.logInfo(`🔧 페이지 네트워크 모니터링 설정: ${pageUrl}`);
 
       // request 이벤트 리스너 설정
       page.on('request', async (request) => {
@@ -116,10 +118,12 @@ class NaverShoppingRealBrowserScraper {
         if (
           url.includes('ncpt.naver.com/v1/wcpt/m/challenge/receipt/question')
         ) {
-          this.logInfo('🧐🧐🧐 영수증 CAPTCHA API 요청 감지! 🧐🧐🧐');
-          this.logInfo(`📍 API URL: ${url}`);
-          this.logInfo(`🔗 Referrer: ${request.headers().referer || 'None'}`);
-          this.logInfo(
+          this.logger.logInfo('🧐🧐🧐 영수증 CAPTCHA API 요청 감지! 🧐🧐🧐');
+          this.logger.logInfo(`📍 API URL: ${url}`);
+          this.logger.logInfo(
+            `🔗 Referrer: ${request.headers().referer || 'None'}`
+          );
+          this.logger.logInfo(
             `🍪 User-Agent: ${request.headers()['user-agent'] || 'None'}`
           );
 
@@ -128,10 +132,10 @@ class NaverShoppingRealBrowserScraper {
             const urlParams = new URL(url).searchParams;
             const captchaKey = urlParams.get('key');
             if (captchaKey) {
-              this.logInfo(`🔑 CAPTCHA Key: ${captchaKey}`);
+              this.logger.logInfo(`🔑 CAPTCHA Key: ${captchaKey}`);
             }
           } catch (urlError) {
-            this.logInfo(`URL 파라미터 추출 실패: ${urlError.message}`);
+            this.logger.logInfo(`URL 파라미터 추출 실패: ${urlError.message}`);
           }
 
           return; // 영수증 API는 별도 처리하므로 일반 로깅 생략
@@ -141,7 +145,9 @@ class NaverShoppingRealBrowserScraper {
       // response 이벤트 리스너 설정
       page.on('response', async (response) => {});
     } catch (error) {
-      this.logError(`페이지 네트워크 모니터링 설정 실패: ${error.message}`);
+      this.logger.logError(
+        `페이지 네트워크 모니터링 설정 실패: ${error.message}`
+      );
     }
   }
 
@@ -167,17 +173,17 @@ class NaverShoppingRealBrowserScraper {
 
     try {
       // 1단계: 네이버 메인 페이지 접속
-      this.logInfo('네이버 메인 페이지 접속 중...');
+      this.logger.logInfo('네이버 메인 페이지 접속 중...');
       await this.page.goto('https://www.naver.com', {
         waitUntil: 'domcontentloaded',
         timeout: this.options.timeout,
       });
 
       await this.randomWait(1000, 1500);
-      this.logSuccess('네이버 메인 페이지 접속 완료');
+      this.logger.logSuccess('네이버 메인 페이지 접속 완료');
 
       // 2단계: 네이버 메인 페이지에서 검색
-      this.logInfo(`네이버 메인에서 "${searchKeyword}" 검색 중...`);
+      this.logger.logInfo(`네이버 메인에서 "${searchKeyword}" 검색 중...`);
 
       // 메인 페이지 검색창 찾기
       const mainSearchSelectors = [
@@ -192,12 +198,12 @@ class NaverShoppingRealBrowserScraper {
       let mainSearchInput = null;
       for (const selector of mainSearchSelectors) {
         try {
-          this.logInfo(`메인 검색창 선택자 시도: ${selector}`);
+          this.logger.logInfo(`메인 검색창 선택자 시도: ${selector}`);
           mainSearchInput = await this.page.waitForSelector(selector, {
             timeout: 3000,
           });
           if (mainSearchInput) {
-            this.logSuccess(`✅ 메인 검색창 발견: ${selector}`);
+            this.logger.logSuccess(`✅ 메인 검색창 발견: ${selector}`);
             break;
           }
         } catch (error) {
@@ -223,10 +229,10 @@ class NaverShoppingRealBrowserScraper {
         .catch(() => {});
       await this.randomWait(1500, 3000);
 
-      this.logSuccess(`"${searchKeyword}" 통합검색 완료`);
+      this.logger.logSuccess(`"${searchKeyword}" 통합검색 완료`);
 
       // 3단계: 네이버 가격비교 더보기 클릭
-      this.logInfo('네이버 가격비교 더보기 버튼 찾는 중...');
+      this.logger.logInfo('네이버 가격비교 더보기 버튼 찾는 중...');
 
       const moreLinkSelectors = [
         'a[class*="storeMoreLink"]',
@@ -242,10 +248,10 @@ class NaverShoppingRealBrowserScraper {
       for (let scrollAttempt = 0; scrollAttempt < 3; scrollAttempt++) {
         for (const selector of moreLinkSelectors) {
           try {
-            this.logInfo(`더보기 링크 선택자 시도: ${selector}`);
+            this.logger.logInfo(`더보기 링크 선택자 시도: ${selector}`);
             moreLinkElement = await this.page.$(selector);
             if (moreLinkElement) {
-              this.logSuccess(`✅ 더보기 링크 발견: ${selector}`);
+              this.logger.logSuccess(`✅ 더보기 링크 발견: ${selector}`);
               break;
             }
           } catch (error) {
@@ -256,7 +262,7 @@ class NaverShoppingRealBrowserScraper {
         if (moreLinkElement) break;
 
         // 페이지 스크롤
-        this.logInfo(
+        this.logger.logInfo(
           `더보기 링크를 찾기 위해 스크롤 (${scrollAttempt + 1}/3)...`
         );
         await this.page.evaluate(() => window.scrollBy(0, 800));
@@ -282,7 +288,7 @@ class NaverShoppingRealBrowserScraper {
             .slice(0, 10);
         });
 
-        this.logInfo('발견된 관련 링크들:');
+        this.logger.logInfo('발견된 관련 링크들:');
         allLinks.forEach((link, index) => {
           console.log(
             `${index + 1}. ${link.text} -> ${link.href} (class: ${
@@ -312,12 +318,12 @@ class NaverShoppingRealBrowserScraper {
 
       // 더보기 링크 클릭
       await moreLinkElement.click();
-      this.logSuccess('네이버 가격비교 더보기 클릭 완료');
+      this.logger.logSuccess('네이버 가격비교 더보기 클릭 완료');
 
       await this.randomWait(1000, 2000);
 
       // 4단계: 새 탭 전환
-      this.logInfo('새 탭 전환 중...');
+      this.logger.logInfo('새 탭 전환 중...');
       const newPages = await this.browser.pages();
 
       let shoppingPage = null;
@@ -328,16 +334,16 @@ class NaverShoppingRealBrowserScraper {
           !url.includes('home')
         ) {
           shoppingPage = page;
-          this.logSuccess(`🎯 쇼핑 검색 페이지 탭 발견: ${url}`);
+          this.logger.logSuccess(`🎯 쇼핑 검색 페이지 탭 발견: ${url}`);
           break;
         }
       }
 
       if (shoppingPage && shoppingPage !== this.page) {
         this.page = shoppingPage;
-        this.logSuccess('✅ 쇼핑 페이지 탭으로 전환');
+        this.logger.logSuccess('✅ 쇼핑 페이지 탭으로 전환');
       } else {
-        this.logInfo('⚠️ 새 탭을 찾지 못함, 현재 탭에서 계속 진행');
+        this.logger.logInfo('⚠️ 새 탭을 찾지 못함, 현재 탭에서 계속 진행');
       }
 
       // 캡차 자동 처리
@@ -351,7 +357,7 @@ class NaverShoppingRealBrowserScraper {
       await this.randomWait(1500, 3000);
 
       // 4-1단계: productId가 포함된 상품 찾기 (최대 10페이지)
-      this.logInfo(
+      this.logger.logInfo(
         `상품 ID "${productId}"가 포함된 상품 찾는 중... (최대 10페이지 검색)`
       );
 
@@ -360,7 +366,7 @@ class NaverShoppingRealBrowserScraper {
       const maxPages = 10;
 
       while (!productFound && currentPage <= maxPages) {
-        this.logInfo(`페이지 ${currentPage}에서 상품 검색 중...`);
+        this.logger.logInfo(`페이지 ${currentPage}에서 상품 검색 중...`);
 
         // 스크롤하면서 상품 찾기
         const productSelectors = [
@@ -382,7 +388,9 @@ class NaverShoppingRealBrowserScraper {
         await this.page.evaluate(() => window.scrollTo(0, 0));
         await this.randomWait(1000, 1500);
 
-        this.logInfo(`페이지 ${currentPage}에서 스크롤하며 상품 검색 시작...`);
+        this.logger.logInfo(
+          `페이지 ${currentPage}에서 스크롤하며 상품 검색 시작...`
+        );
 
         // 연속적이고 자연스러운 스크롤로 상품 찾기
         let lastScrollTime = Date.now();
@@ -393,7 +401,7 @@ class NaverShoppingRealBrowserScraper {
 
           // 매 5번째 스크롤마다 진행상황 로그
           if (scrollAttempts % 5 === 1) {
-            this.logInfo(
+            this.logger.logInfo(
               `페이지 ${currentPage} - 스크롤 진행중... (${scrollAttempts}/${maxScrollAttempts})`
             );
           }
@@ -404,7 +412,7 @@ class NaverShoppingRealBrowserScraper {
               productElement = await this.page.$(selector);
               if (productElement) {
                 foundProductSelector = selector;
-                this.logSuccess(
+                this.logger.logSuccess(
                   `✅ 상품 발견: ${selector} (페이지 ${currentPage}, 스크롤 ${scrollAttempts})`
                 );
                 productFound = true;
@@ -417,18 +425,18 @@ class NaverShoppingRealBrowserScraper {
 
           if (productFound) {
             // 상품이 보이도록 부드럽게 스크롤
-            this.logInfo('상품을 화면 중앙으로 이동시키는 중...');
+            this.logger.logInfo('상품을 화면 중앙으로 이동시키는 중...');
             await productElement.evaluate((el) =>
               el.scrollIntoView({ behavior: 'smooth', block: 'center' })
             );
             await this.randomWait(500, 1000); // 스크롤 완료 대기
 
             // 상품 클릭
-            this.logInfo('상품 클릭 중...');
+            this.logger.logInfo('상품 클릭 중...');
             try {
               await productElement.click();
             } catch (clickError) {
-              this.logInfo('일반 클릭 실패 - 강제 클릭 시도...');
+              this.logger.logInfo('일반 클릭 실패 - 강제 클릭 시도...');
               await this.page.evaluate((selector) => {
                 const element = document.querySelector(selector);
                 if (element) {
@@ -436,7 +444,7 @@ class NaverShoppingRealBrowserScraper {
                 }
               }, foundProductSelector);
             }
-            this.logSuccess('상품 클릭 완료');
+            this.logger.logSuccess('상품 클릭 완료');
             break;
           }
 
@@ -470,7 +478,7 @@ class NaverShoppingRealBrowserScraper {
             noNewContentCount++;
             // 연속으로 2번 높이가 같으면 페이지 끝으로 판단
             if (noNewContentCount >= 2) {
-              this.logInfo(
+              this.logger.logInfo(
                 `페이지 ${currentPage} 끝에 도달 - 상품을 찾지 못함`
               );
               break;
@@ -485,7 +493,7 @@ class NaverShoppingRealBrowserScraper {
         if (!productFound) {
           // 다음 페이지로 이동
           if (currentPage < maxPages) {
-            this.logInfo(
+            this.logger.logInfo(
               `페이지 ${currentPage}에서 상품을 찾지 못함, 다음 페이지로 이동 중...`
             );
 
@@ -510,7 +518,7 @@ class NaverShoppingRealBrowserScraper {
                   );
 
                   if (!isDisabled) {
-                    this.logInfo(`다음 페이지 버튼 발견: ${selector}`);
+                    this.logger.logInfo(`다음 페이지 버튼 발견: ${selector}`);
                     break;
                   } else {
                     nextButton = null;
@@ -525,7 +533,7 @@ class NaverShoppingRealBrowserScraper {
               await nextButton.click();
               await this.randomWait(2000, 4000);
             } else {
-              this.logInfo(
+              this.logger.logInfo(
                 '다음 페이지 버튼을 찾을 수 없거나 비활성화됨 - 검색 종료'
               );
               break;
@@ -544,7 +552,7 @@ class NaverShoppingRealBrowserScraper {
       }
 
       // 6단계: 새 탭에서 상품 상세 페이지 열림 대기 및 전환
-      this.logInfo('상품 상세 페이지 새 탭 대기 중...');
+      this.logger.logInfo('상품 상세 페이지 새 탭 대기 중...');
       await this.randomWait(2000, 4000);
 
       // 모든 페이지 확인하여 상품 상세 페이지 찾기
@@ -558,37 +566,39 @@ class NaverShoppingRealBrowserScraper {
           (url.includes(`/catalog/`) && url.includes(productId))
         ) {
           productDetailPage = page;
-          this.logSuccess(`🎯 상품 상세 페이지 발견: ${url}`);
+          this.logger.logSuccess(`🎯 상품 상세 페이지 발견: ${url}`);
           break;
         }
       }
 
       if (productDetailPage && productDetailPage !== this.page) {
         this.page = productDetailPage;
-        this.logSuccess('✅ 상품 상세 페이지 탭으로 전환');
+        this.logger.logSuccess('✅ 상품 상세 페이지 탭으로 전환');
       } else {
-        this.logInfo('⚠️ 새로운 상품 상세 페이지 탭을 찾지 못함');
+        this.logger.logInfo('⚠️ 새로운 상품 상세 페이지 탭을 찾지 못함');
       }
 
       // 페이지 로딩 완료 대기
       await this.randomWait(2000, 4000);
 
       const finalUrl = this.page.url();
-      this.logInfo(`최종 URL: ${finalUrl}`);
+      this.logger.logInfo(`최종 URL: ${finalUrl}`);
 
       // 7단계: 상품 페이지 HTML 저장 및 데이터 파싱
-      this.logSuccess('상품 상세 페이지 HTML 저장 및 데이터 파싱 중...');
+      this.logger.logSuccess('상품 상세 페이지 HTML 저장 및 데이터 파싱 중...');
 
       try {
         const htmlContent = await this.page.content();
 
         // HTML 파일 저장
         const savedPath = await this.saveProductHtml(htmlContent, productId);
-        this.logInfo(`📁 HTML 파일 저장됨: ${savedPath}`);
-        this.logInfo(`📊 HTML 길이: ${htmlContent.length.toLocaleString()}자`);
+        this.logger.logInfo(`📁 HTML 파일 저장됨: ${savedPath}`);
+        this.logger.logInfo(
+          `📊 HTML 길이: ${htmlContent.length.toLocaleString()}자`
+        );
 
         // __NEXT_DATA__ JSON 데이터 파싱
-        this.logInfo('🔍 __NEXT_DATA__ JSON 데이터 파싱 시작...');
+        this.logger.logInfo('🔍 __NEXT_DATA__ JSON 데이터 파싱 시작...');
 
         try {
           // 파서를 사용하여 모든 데이터 파싱
@@ -603,39 +613,43 @@ class NaverShoppingRealBrowserScraper {
               parseResult.data,
               productId
             );
-            this.logInfo(`📄 데이터 JSON 파일 저장됨: ${dataFilePath}`);
-            this.logSuccess('🎉 데이터 파싱 및 저장 완료!');
+            this.logger.logInfo(`📄 데이터 JSON 파일 저장됨: ${dataFilePath}`);
+            this.logger.logSuccess('🎉 데이터 파싱 및 저장 완료!');
           } else {
             throw new Error(parseResult.error);
           }
         } catch (parseError) {
-          this.logError(`데이터 파싱 실패: ${parseError.message}`);
-          this.logInfo('⚠️ HTML은 저장되었으나 데이터 파싱에 실패했습니다');
+          this.logger.logError(`데이터 파싱 실패: ${parseError.message}`);
+          this.logger.logInfo(
+            '⚠️ HTML은 저장되었으나 데이터 파싱에 실패했습니다'
+          );
         }
 
-        this.logSuccess('시나리오 완료 - 상품 상세 페이지에서 대기 중');
+        this.logger.logSuccess('시나리오 완료 - 상품 상세 페이지에서 대기 중');
 
         // 무한 대기 (사용자 조작 허용)
-        // this.logInfo('사용자 조작을 위해 무한 대기 중... (Ctrl+C로 종료)');
+        // this.logger.logInfo('사용자 조작을 위해 무한 대기 중... (Ctrl+C로 종료)');
         // while (true) {
         //   await this.randomWait(10000, 15000);
-        //   this.logInfo('대기 중...');
+        //   this.logger.logInfo('대기 중...');
         // }
       } catch (saveError) {
-        this.logError(`HTML 저장 실패: ${saveError.message}`);
-        this.logInfo('HTML 저장에 실패했지만 계속 진행합니다...');
+        this.logger.logError(`HTML 저장 실패: ${saveError.message}`);
+        this.logger.logInfo('HTML 저장에 실패했지만 계속 진행합니다...');
 
-        this.logSuccess('시나리오 완료 - 상품 상세 페이지에서 대기 중');
+        this.logger.logSuccess('시나리오 완료 - 상품 상세 페이지에서 대기 중');
 
         // 무한 대기 (사용자 조작 허용)
-        this.logInfo('사용자 조작을 위해 무한 대기 중... (Ctrl+C로 종료)');
+        this.logger.logInfo(
+          '사용자 조작을 위해 무한 대기 중... (Ctrl+C로 종료)'
+        );
         while (true) {
           await this.randomWait(10000, 15000);
-          this.logInfo('대기 중...');
+          this.logger.logInfo('대기 중...');
         }
       }
     } catch (error) {
-      this.logError(`시나리오 실행 실패: ${error.message}`);
+      this.logger.logError(`시나리오 실행 실패: ${error.message}`);
 
       // 에러 시 스크린샷 저장
       if (this.page) {
@@ -644,9 +658,11 @@ class NaverShoppingRealBrowserScraper {
             path: `error-scenario-${Date.now()}.png`,
             fullPage: true,
           });
-          this.logInfo('에러 스크린샷 저장됨');
+          this.logger.logInfo('에러 스크린샷 저장됨');
         } catch (screenshotError) {
-          this.logError(`스크린샷 저장 실패: ${screenshotError.message}`);
+          this.logger.logError(
+            `스크린샷 저장 실패: ${screenshotError.message}`
+          );
         }
       }
 
@@ -667,7 +683,7 @@ class NaverShoppingRealBrowserScraper {
       const resultDir = 'result';
       if (!fs.existsSync(resultDir)) {
         await fsPromises.mkdir(resultDir, { recursive: true });
-        this.logInfo('📁 result 디렉토리 생성됨');
+        this.logger.logInfo('📁 result 디렉토리 생성됨');
       }
 
       await fsPromises.writeFile(
@@ -675,26 +691,28 @@ class NaverShoppingRealBrowserScraper {
         JSON.stringify(productData, null, 2),
         'utf8'
       );
-      this.logSuccess(`상품 데이터 JSON 파일 저장 완료: ${filename}`);
+      this.logger.logSuccess(`상품 데이터 JSON 파일 저장 완료: ${filename}`);
 
       // 파일 크기 정보 출력
       const stats = await fsPromises.stat(filename);
-      this.logInfo(`📊 저장된 파일 크기: ${(stats.size / 1024).toFixed(2)} KB`);
+      this.logger.logInfo(
+        `📊 저장된 파일 크기: ${(stats.size / 1024).toFixed(2)} KB`
+      );
 
       // 간단한 요약 정보 출력 (파서의 summary 사용)
       if (productData.summary) {
-        this.logInfo('=== 추출된 데이터 요약 ===');
-        this.logInfo(
+        this.logger.logInfo('=== 추출된 데이터 요약 ===');
+        this.logger.logInfo(
           `📦 상품 정보: ${
             productData.summary.productInfoAvailable ? '✅ 추출됨' : '❌ 없음'
           }`
         );
-        this.logInfo(
+        this.logger.logInfo(
           `📂 카테고리 정보: ${
             productData.summary.categoryInfoAvailable ? '✅ 추출됨' : '❌ 없음'
           }`
         );
-        this.logInfo(
+        this.logger.logInfo(
           `🏪 판매처별 상품: ${
             productData.summary.catalogProductsCount > 0
               ? `✅ ${productData.summary.catalogProductsCount}개`
@@ -705,7 +723,7 @@ class NaverShoppingRealBrowserScraper {
 
       return filename;
     } catch (error) {
-      this.logError(`상품 데이터 저장 실패: ${error.message}`);
+      this.logger.logError(`상품 데이터 저장 실패: ${error.message}`);
       throw error;
     }
   }
@@ -723,7 +741,7 @@ class NaverShoppingRealBrowserScraper {
       const resultDir = 'result';
       if (!fs.existsSync(resultDir)) {
         await fsPromises.mkdir(resultDir, { recursive: true });
-        this.logInfo('📁 result 디렉토리 생성됨');
+        this.logger.logInfo('📁 result 디렉토리 생성됨');
       }
 
       // 파서를 사용하여 HTML 메타데이터 추가
@@ -733,17 +751,17 @@ class NaverShoppingRealBrowserScraper {
       );
 
       await fsPromises.writeFile(filename, htmlWithMeta, 'utf8');
-      this.logSuccess(`상품 HTML 파일 저장 완료: ${filename}`);
+      this.logger.logSuccess(`상품 HTML 파일 저장 완료: ${filename}`);
 
       // 파일 크기 정보 출력
       const stats = await fsPromises.stat(filename);
-      this.logInfo(
+      this.logger.logInfo(
         `📊 저장된 파일 크기: ${(stats.size / 1024 / 1024).toFixed(2)} MB`
       );
 
       return filename;
     } catch (error) {
-      this.logError(`상품 HTML 파일 저장 실패: ${error.message}`);
+      this.logger.logError(`상품 HTML 파일 저장 실패: ${error.message}`);
       throw error;
     }
   }
@@ -760,12 +778,11 @@ class NaverShoppingRealBrowserScraper {
         await this.browser.close();
         this.browser = null;
       }
-      this.logSuccess('브라우저 연결 해제 완료 (브라우저는 계속 실행 중)');
-
-      // 부모 클래스 정리 호출
-      await super.close();
+      this.logger.logSuccess(
+        '브라우저 연결 해제 완료 (브라우저는 계속 실행 중)'
+      );
     } catch (error) {
-      this.logError(`Playwright 브라우저 종료 실패: ${error.message}`);
+      this.logger.logError(`Playwright 브라우저 종료 실패: ${error.message}`);
     }
   }
 }

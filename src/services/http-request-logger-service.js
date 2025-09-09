@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-class LoggerService {
+class HttpRequestLoggerService {
   constructor(options = {}) {
     this.config = {
       enabled: process.env.ENABLE_LOGGING !== 'false' && options.enableLogging !== false,
@@ -130,4 +130,4 @@ class LoggerService {
   }
 }
 
-export default LoggerService;
+export default HttpRequestLoggerService;

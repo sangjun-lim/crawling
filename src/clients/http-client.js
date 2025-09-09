@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
-import LogUtils from '../services/logger-service.js';
 import { HTTP_HEADERS, DEFAULT_OPTIONS } from '../config/constants.js';
+import HttpRequestLoggerService from '../services/http-request-logger-service.js';
 
 class HttpClient {
   constructor(options = {}) {
@@ -13,7 +13,7 @@ class HttpClient {
       ...options,
     };
 
-    this.logUtils = new LogUtils(options);
+    this.httpLogger = new HttpRequestLoggerService(options);
 
     // 프록시 로테이션 설정
     this.proxies = options.proxies || [];
@@ -109,11 +109,11 @@ class HttpClient {
           }
         }
 
-        this.logUtils.logRequest(config);
+        this.httpLogger.logRequest(config);
         return config;
       },
       (error) => {
-        this.logUtils.logError(error, 'request_error');
+        this.httpLogger.logError(error, 'request_error');
         return Promise.reject(error);
       }
     );
@@ -125,7 +125,7 @@ class HttpClient {
           this.updateProxyStats(response.config.proxyUrl, true);
         }
 
-        this.logUtils.logResponse(response);
+        this.httpLogger.logResponse(response);
 
         if (response.request._redirects?.length > 0) {
           console.log(
@@ -149,7 +149,7 @@ class HttpClient {
           }
         }
 
-        this.logUtils.logError(error, 'response_error');
+        this.httpLogger.logError(error, 'response_error');
 
         if (error.response?.status >= 300 && error.response?.status < 400) {
           console.log(

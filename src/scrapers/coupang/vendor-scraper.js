@@ -1,5 +1,5 @@
 import HttpClient from '../../clients/http-client.js';
-import LogUtils from '../../services/logger-service.js';
+import HttpRequestLoggerService from '../../services/http-request-logger-service.js';
 
 class CoupangVendorScraper {
   constructor(options = {}) {
@@ -8,7 +8,7 @@ class CoupangVendorScraper {
       enableCookies: true,
       ...options,
     });
-    this.logUtils = new LogUtils(options);
+    this.httpLogger = new HttpRequestLoggerService(options);
 
     // Rate limiting: 600 requests per minute = 100ms interval
     this.rateLimitDelay = 100; // milliseconds
@@ -61,7 +61,7 @@ class CoupangVendorScraper {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      this.logUtils.logError(error, `vendor_scraping_error_${vendorId}`);
+      this.httpLogger.logError(error, `vendor_scraping_error_${vendorId}`);
 
       return {
         success: false,

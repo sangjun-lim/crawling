@@ -1,5 +1,5 @@
 import { CurlImpersonate } from 'node-curl-impersonate';
-import LogUtils from '../services/logger-service.js';
+import HttpRequestLoggerService from '../services/http-request-logger-service.js';
 
 class CurlHttpClient {
   constructor(options = {}) {
@@ -8,10 +8,10 @@ class CurlHttpClient {
       enableCookies: options.enableCookies !== false,
       proxy: options.proxy || null, // 프록시 설정
       proxyAuth: options.proxyAuth || null, // 프록시 인증 (username:password)
-      ...options
+      ...options,
     };
-    
-    this.logUtils = new LogUtils(options);
+
+    this.httpLogger = new HttpRequestLoggerService(options);
     this.cookieJar = new Map(); // 쿠키 저장소 (domain -> cookies)
     this.sessionHeaders = new Map(); // 세션 헤더 저장소
   }
@@ -20,27 +20,30 @@ class CurlHttpClient {
     try {
       // URL에 파라미터 추가
       const urlObj = new URL(url);
-      Object.keys(params).forEach(key => {
+      Object.keys(params).forEach((key) => {
         urlObj.searchParams.append(key, params[key]);
       });
       const finalUrl = urlObj.toString();
 
       // 기본 헤더 설정 (Chrome 116 모방)
       const defaultHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
         'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
+        DNT: '1',
+        Connection: 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
-        'sec-ch-ua': '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
+        'sec-ch-ua':
+          '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
         'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"'
+        'sec-ch-ua-platform': '"Windows"',
       };
 
       const finalHeaders = { ...defaultHeaders, ...headers };
@@ -50,7 +53,11 @@ class CurlHttpClient {
       const cookies = this.getCookiesForDomain(domain);
       if (cookies) {
         finalHeaders['Cookie'] = cookies;
-        console.log(`[COOKIE] Sending cookies to ${domain}: ${cookies.substring(0, 100)}${cookies.length > 100 ? '...' : ''}`);
+        console.log(
+          `[COOKIE] Sending cookies to ${domain}: ${cookies.substring(0, 100)}${
+            cookies.length > 100 ? '...' : ''
+          }`
+        );
       } else {
         console.log(`[COOKIE] No cookies found for ${domain}`);
       }
@@ -63,15 +70,15 @@ class CurlHttpClient {
       const logConfig = {
         method: 'GET',
         url: finalUrl,
-        headers: finalHeaders
+        headers: finalHeaders,
       };
-      this.logUtils.logRequest(logConfig);
+      this.httpLogger.logRequest(logConfig);
 
       // curl-impersonate로 요청 실행 (Chrome 브라우저 모방)
       const curlOptions = {
         method: 'GET',
         impersonate: 'chrome-116',
-        headers: finalHeaders
+        headers: finalHeaders,
       };
 
       // 프록시 설정 추가
@@ -88,7 +95,7 @@ class CurlHttpClient {
       }
 
       const curl = new CurlImpersonate(finalUrl, curlOptions);
-      
+
       const response = await curl.makeRequest();
 
       // 응답 객체 구성 (axios와 비슷한 형태)
@@ -100,13 +107,13 @@ class CurlHttpClient {
         config: logConfig,
         request: {
           res: {
-            responseUrl: finalUrl
-          }
-        }
+            responseUrl: finalUrl,
+          },
+        },
       };
 
       // 로그 응답
-      this.logUtils.logResponse(responseObj);
+      this.httpLogger.logResponse(responseObj);
 
       // 쿠키 저장
       if (this.config.enableCookies && response.responseHeaders) {
@@ -114,21 +121,26 @@ class CurlHttpClient {
         this.saveCookiesFromResponse(domain, response.responseHeaders);
         const afterCount = this.cookieJar.get(domain)?.length || 0;
         if (afterCount > beforeCount) {
-          console.log(`[COOKIE] Saved ${afterCount - beforeCount} new cookies from ${domain} (total: ${afterCount})`);
+          console.log(
+            `[COOKIE] Saved ${
+              afterCount - beforeCount
+            } new cookies from ${domain} (total: ${afterCount})`
+          );
         }
       }
 
       if (response.statusCode >= 400) {
-        const error = new Error(`Request failed with status code ${response.statusCode}`);
+        const error = new Error(
+          `Request failed with status code ${response.statusCode}`
+        );
         error.response = responseObj;
-        this.logUtils.logError(error, 'response_error');
+        this.httpLogger.logError(error, 'response_error');
         throw error;
       }
 
       return responseObj;
-
     } catch (error) {
-      this.logUtils.logError(error, 'request_error');
+      this.httpLogger.logError(error, 'request_error');
       throw error;
     }
   }
@@ -136,16 +148,18 @@ class CurlHttpClient {
   async post(url, data, headers = {}) {
     try {
       const defaultHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
         'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
         'Accept-Encoding': 'gzip, deflate, br',
         'Content-Type': 'application/json',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'sec-ch-ua': '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
+        DNT: '1',
+        Connection: 'keep-alive',
+        'sec-ch-ua':
+          '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
         'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"'
+        'sec-ch-ua-platform': '"Windows"',
       };
 
       const finalHeaders = { ...defaultHeaders, ...headers };
@@ -155,7 +169,11 @@ class CurlHttpClient {
       const cookies = this.getCookiesForDomain(domain);
       if (cookies) {
         finalHeaders['Cookie'] = cookies;
-        console.log(`[COOKIE] Sending cookies to ${domain}: ${cookies.substring(0, 100)}${cookies.length > 100 ? '...' : ''}`);
+        console.log(
+          `[COOKIE] Sending cookies to ${domain}: ${cookies.substring(0, 100)}${
+            cookies.length > 100 ? '...' : ''
+          }`
+        );
       } else {
         console.log(`[COOKIE] No cookies found for ${domain}`);
       }
@@ -168,15 +186,15 @@ class CurlHttpClient {
         method: 'POST',
         url: url,
         headers: finalHeaders,
-        data: data
+        data: data,
       };
-      this.logUtils.logRequest(logConfig);
+      this.httpLogger.logRequest(logConfig);
 
       const curlOptions = {
         method: 'POST',
         impersonate: 'chrome-116',
         headers: finalHeaders,
-        body: typeof data === 'string' ? data : JSON.stringify(data)
+        body: typeof data === 'string' ? data : JSON.stringify(data),
       };
 
       // 프록시 설정 추가
@@ -193,7 +211,7 @@ class CurlHttpClient {
       }
 
       const curl = new CurlImpersonate(url, curlOptions);
-      
+
       const response = await curl.makeRequest();
 
       const responseObj = {
@@ -204,12 +222,12 @@ class CurlHttpClient {
         config: logConfig,
         request: {
           res: {
-            responseUrl: url
-          }
-        }
+            responseUrl: url,
+          },
+        },
       };
 
-      this.logUtils.logResponse(responseObj);
+      this.httpLogger.logResponse(responseObj);
 
       // 쿠키 저장
       if (this.config.enableCookies && response.responseHeaders) {
@@ -217,21 +235,26 @@ class CurlHttpClient {
         this.saveCookiesFromResponse(domain, response.responseHeaders);
         const afterCount = this.cookieJar.get(domain)?.length || 0;
         if (afterCount > beforeCount) {
-          console.log(`[COOKIE] Saved ${afterCount - beforeCount} new cookies from ${domain} (total: ${afterCount})`);
+          console.log(
+            `[COOKIE] Saved ${
+              afterCount - beforeCount
+            } new cookies from ${domain} (total: ${afterCount})`
+          );
         }
       }
 
       if (response.statusCode >= 400) {
-        const error = new Error(`Request failed with status code ${response.statusCode}`);
+        const error = new Error(
+          `Request failed with status code ${response.statusCode}`
+        );
         error.response = responseObj;
-        this.logUtils.logError(error, 'response_error');
+        this.httpLogger.logError(error, 'response_error');
         throw error;
       }
 
       return responseObj;
-
     } catch (error) {
-      this.logUtils.logError(error, 'request_error');
+      this.httpLogger.logError(error, 'request_error');
       throw error;
     }
   }
@@ -248,7 +271,7 @@ class CurlHttpClient {
       429: 'Too Many Requests',
       500: 'Internal Server Error',
       502: 'Bad Gateway',
-      503: 'Service Unavailable'
+      503: 'Service Unavailable',
     };
     return statusTexts[statusCode] || 'Unknown';
   }
@@ -256,43 +279,48 @@ class CurlHttpClient {
   buildWtmGraphqlHeader(keyword) {
     const wtmData = {
       arg: keyword,
-      type: "restaurant",
-      source: "place"
+      type: 'restaurant',
+      source: 'place',
     };
-    
-    const base64Encoded = Buffer.from(JSON.stringify(wtmData), 'utf-8').toString('base64');
+
+    const base64Encoded = Buffer.from(
+      JSON.stringify(wtmData),
+      'utf-8'
+    ).toString('base64');
     return base64Encoded;
   }
 
   // 쿠키 관리 메서드들
   getCookiesForDomain(domain) {
     let allCookies = [];
-    
+
     // 현재 도메인과 매칭되는 모든 쿠키 찾기
     for (const [cookieDomain, cookies] of this.cookieJar.entries()) {
       if (this.isDomainMatch(domain, cookieDomain)) {
         allCookies.push(...cookies);
       }
     }
-    
+
     if (allCookies.length === 0) {
       return null;
     }
-    
+
     // 만료된 쿠키 제거
-    const validCookies = allCookies.filter(cookie => {
+    const validCookies = allCookies.filter((cookie) => {
       if (cookie.expires) {
         return new Date() < new Date(cookie.expires);
       }
       return true; // 만료 시간이 없으면 세션 쿠키
     });
-    
+
     if (validCookies.length === 0) {
       return null;
     }
-    
+
     // 쿠키 문자열로 변환
-    return validCookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+    return validCookies
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
   }
 
   // 도메인 매칭 로직
@@ -300,21 +328,23 @@ class CurlHttpClient {
     if (requestDomain === cookieDomain) {
       return true;
     }
-    
+
     // .naver.com 같은 상위 도메인 쿠키 체크
     if (cookieDomain.startsWith('.')) {
       const baseDomain = cookieDomain.substring(1); // . 제거
-      return requestDomain === baseDomain || requestDomain.endsWith('.' + baseDomain);
+      return (
+        requestDomain === baseDomain || requestDomain.endsWith('.' + baseDomain)
+      );
     }
-    
+
     return false;
   }
 
   saveCookiesFromResponse(domain, responseHeaders) {
     const setCookieHeaders = [];
-    
+
     // Set-Cookie 헤더 찾기 (대소문자 구분 없이)
-    Object.keys(responseHeaders).forEach(key => {
+    Object.keys(responseHeaders).forEach((key) => {
       if (key.toLowerCase() === 'set-cookie') {
         const headerValue = responseHeaders[key];
         if (Array.isArray(headerValue)) {
@@ -330,34 +360,36 @@ class CurlHttpClient {
     }
 
     // 새 쿠키 파싱 및 저장
-    setCookieHeaders.forEach(cookieStr => {
+    setCookieHeaders.forEach((cookieStr) => {
       const cookie = this.parseCookie(cookieStr);
       if (cookie) {
         // 쿠키 도메인 결정
         let cookieDomain = domain; // 기본값: 요청한 도메인
-        
+
         if (cookie.domain) {
           // Set-Cookie에 domain 속성이 있으면 사용
-          cookieDomain = cookie.domain.startsWith('.') ? cookie.domain : cookie.domain;
+          cookieDomain = cookie.domain.startsWith('.')
+            ? cookie.domain
+            : cookie.domain;
           console.log(`[COOKIE] Using domain from Set-Cookie: ${cookieDomain}`);
         }
 
         // 해당 도메인의 기존 쿠키 가져오기
         let domainCookies = this.cookieJar.get(cookieDomain) || [];
-        
+
         // 같은 이름의 쿠키가 있으면 교체
-        domainCookies = domainCookies.filter(c => c.name !== cookie.name);
+        domainCookies = domainCookies.filter((c) => c.name !== cookie.name);
         domainCookies.push(cookie);
-        
+
         this.cookieJar.set(cookieDomain, domainCookies);
       }
     });
   }
 
   parseCookie(cookieStr) {
-    const parts = cookieStr.split(';').map(part => part.trim());
+    const parts = cookieStr.split(';').map((part) => part.trim());
     const [nameValue] = parts;
-    const [name, value] = nameValue.split('=').map(part => part.trim());
+    const [name, value] = nameValue.split('=').map((part) => part.trim());
 
     if (!name || value === undefined) {
       return null;
@@ -366,10 +398,10 @@ class CurlHttpClient {
     const cookie = { name, value };
 
     // 쿠키 속성 파싱
-    parts.slice(1).forEach(part => {
-      const [key, val] = part.split('=').map(p => p.trim());
+    parts.slice(1).forEach((part) => {
+      const [key, val] = part.split('=').map((p) => p.trim());
       const keyLower = key.toLowerCase();
-      
+
       if (keyLower === 'expires') {
         cookie.expires = val;
       } else if (keyLower === 'max-age') {
@@ -443,19 +475,21 @@ class CurlHttpClient {
   getProxyInfo() {
     return {
       proxy: this.config.proxy,
-      hasAuth: !!this.config.proxyAuth
+      hasAuth: !!this.config.proxyAuth,
     };
   }
 
   // 수동 쿠키 주입 메서드
   injectCookies(domain, cookieString) {
-    const cookies = cookieString.split('; ').map(cookiePair => {
+    const cookies = cookieString.split('; ').map((cookiePair) => {
       const [name, value] = cookiePair.split('=');
       return { name: name.trim(), value: value?.trim() || '' };
     });
 
     this.cookieJar.set(domain, cookies);
-    console.log(`[COOKIE] Manually injected ${cookies.length} cookies for ${domain}`);
+    console.log(
+      `[COOKIE] Manually injected ${cookies.length} cookies for ${domain}`
+    );
   }
 }
 

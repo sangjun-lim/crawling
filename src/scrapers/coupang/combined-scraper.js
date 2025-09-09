@@ -1,7 +1,7 @@
 import HttpClient from '../../clients/http-client.js';
-import LoggerService from '../../services/logger-service.js';
 import CheckpointService from '../../services/checkpoint-service.js';
 import CoupangStorageService from '../../services/coupang-storage-service.js';
+import HttpRequestLoggerService from '../../services/http-request-logger-service.js';
 
 class CoupangCombinedScraper {
   constructor(options = {}) {
@@ -10,7 +10,7 @@ class CoupangCombinedScraper {
       enableCookies: true,
       ...options,
     });
-    this.logUtils = new LoggerService(options);
+    this.httpLogger = new HttpRequestLoggerService();
     this.checkpointManager = new CheckpointService(options);
     this.storage = new CoupangStorageService(options);
 
@@ -74,7 +74,7 @@ class CoupangCombinedScraper {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      this.logUtils.logError(error, `combined_vendor_error_${vendorId}`);
+      this.httpLogger.logError(error, `combined_vendor_error_${vendorId}`);
 
       return {
         success: false,
@@ -125,7 +125,7 @@ class CoupangCombinedScraper {
         requestParams: defaultParams,
       };
     } catch (error) {
-      this.logUtils.logError(
+      this.httpLogger.logError(
         error,
         `combined_product_error_${params.vendorId}`
       );

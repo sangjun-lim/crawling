@@ -1,5 +1,5 @@
 import HttpClient from '../../clients/http-client.js';
-import LogUtils from '../../services/logger-service.js';
+import HttpRequestLoggerService from '../../services/http-request-logger-service.js';
 
 class CoupangProductListScraper {
   constructor(options = {}) {
@@ -8,7 +8,7 @@ class CoupangProductListScraper {
       enableCookies: true,
       ...options,
     });
-    this.logUtils = new LogUtils(options);
+    this.httpLogger = new HttpRequestLoggerService(options);
 
     // Rate limiting: 600 requests per minute = 100ms interval
     this.rateLimitDelay = 100; // milliseconds
@@ -66,7 +66,7 @@ class CoupangProductListScraper {
         requestParams: defaultParams,
       };
     } catch (error) {
-      this.logUtils.logError(
+      this.httpLogger.logError(
         error,
         `product_list_scraping_error_${params.vendorId}`
       );

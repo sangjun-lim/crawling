@@ -1,17 +1,17 @@
 import { chromium } from 'playwright';
-import LoggerService from '../../services/logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
+import LogUtils from '../../utils/log-utils.js';
 
 class NaverSmartStoreScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
-    this.logger = new LoggerService(options);
+    this.logger = new LogUtils(options);
     this.proxyService = new ProxyService(options);
 
     this.options = {
-      headless: options.headless ?? true,
+      headless: options.headless ?? false,
       timeout: options.timeout ?? 30000,
       slowMo: options.slowMo ?? 500,
       enableLogging: options.enableLogging ?? true,
@@ -26,10 +26,7 @@ class NaverSmartStoreScraper {
 
   async init() {
     try {
-      // 부모 클래스 초기화 (프록시 테스트 포함)
-      await super.init();
-
-      this.logInfo('Playwright 브라우저 초기화 중...');
+      this.logger.logInfo('Playwright 브라우저 초기화 중...');
 
       const launchOptions = {
         headless: this.options.headless,
@@ -43,13 +40,6 @@ class NaverSmartStoreScraper {
           '--disable-features=VizDisplayCompositor',
         ],
       };
-
-      // 프록시 설정 적용
-      const playwrightProxyConfig = this.getPlaywrightProxyConfig();
-      if (playwrightProxyConfig) {
-        launchOptions.proxy = playwrightProxyConfig;
-        this.logInfo(`프록시 설정 적용: ${playwrightProxyConfig.server}`);
-      }
 
       this.browser = await chromium.launch(launchOptions);
 
@@ -69,10 +59,10 @@ class NaverSmartStoreScraper {
       this.setupApiMonitoring();
       await this.setupAntiDetection();
 
-      this.logSuccess('Playwright 초기화 완료');
+      this.logger.logSuccess('Playwright 초기화 완료');
       return true;
     } catch (error) {
-      this.logError(`Playwright 초기화 실패: ${error.message}`);
+      this.logger.logError(`Playwright 초기화 실패: ${error.message}`);
       return false;
     }
   }
@@ -255,9 +245,7 @@ class NaverSmartStoreScraper {
       const productData = await this.crawlProductBySearch(storeId, productId);
 
       // 결과 저장
-      if (productData && this.options.saveData) {
-        await this.saveData(productData, `search-${productId}`);
-      }
+      await this.saveData(productData, `smart-store-${productId}`);
 
       console.log(`검색 수집 완료: ${productData ? '성공' : '실패'}`);
       return productData ? [productData] : [];
@@ -658,12 +646,9 @@ class NaverSmartStoreScraper {
         await this.browser.close();
         this.browser = null;
       }
-      this.logSuccess('Playwright 브라우저 종료 완료');
-
-      // 부모 클래스 정리 호출
-      await super.close();
+      this.logger.logSuccess('Playwright 브라우저 종료 완료');
     } catch (error) {
-      this.logError(`Playwright 브라우저 종료 실패: ${error.message}`);
+      this.logger.logError(`Playwright 브라우저 종료 실패: ${error.message}`);
     }
   }
 }
