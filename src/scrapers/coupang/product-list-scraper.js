@@ -11,7 +11,7 @@ class CoupangProductListScraper {
     this.httpLogger = new HttpRequestLoggerService(options);
 
     // Rate limiting: 600 requests per minute = 100ms interval
-    this.rateLimitDelay = 100; // milliseconds
+    this.rateLimitDelay = options.rateLimitDelay || 100; // milliseconds
     this.lastRequestTime = 0;
   }
 
