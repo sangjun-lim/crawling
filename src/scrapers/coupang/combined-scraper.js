@@ -15,7 +15,7 @@ class CoupangCombinedScraper {
     this.storage = new CoupangStorageService(options);
 
     // Rate limiting: 벤더당 2번 요청이므로 200ms 간격 (300 requests per minute)
-    this.rateLimitDelay = 150; // milliseconds
+    this.rateLimitDelay = 200; // milliseconds
     this.lastRequestTime = 0;
 
     // 배치 설정

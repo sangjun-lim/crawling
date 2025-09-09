@@ -41,7 +41,7 @@ class NaverMapScraper {
     this.responseParser = new NaverMapResponseParser();
   }
 
-  async searchStores(keyword, maxResults = null) {
+  async searchStores(keyword) {
     try {
       console.log(`"${keyword}" 검색 시작...`);
 
@@ -51,12 +51,10 @@ class NaverMapScraper {
       );
       const stores = await this.fetchStoresFromNaverMap(keyword, coords);
 
-      const limitedStores = maxResults ? stores.slice(0, maxResults) : stores;
-
       return {
         keyword,
-        total: limitedStores.length,
-        stores: limitedStores.map((store, index) => ({
+        total: stores.length,
+        stores: stores.map((store, index) => ({
           ...store,
           rank: index + 1,
         })),

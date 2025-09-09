@@ -11,24 +11,23 @@ A Node.js web scraping application that extracts business ranking data from Nave
 ### Development
 
 ```bash
-# Run the scraper with default settings (map mode, keyword: 치킨)
+# Run the scraper with default settings (shows usage)
 npm start
 
-# Run with specific mode, keyword/URL, and max results
-node index.js [map|smartstore|navershopping] [keyword|url] [maxResults]
+# NEW UNIFIED CLI FORMAT: node index.js [site] [mode] [args]
 
 # Example searches - Naver Map
-node index.js map "강남 맛집" 10
-node index.js map "카페" 50
-node index.js map "미용실" 20
+node index.js naver map "강남 맛집"
+node index.js naver map "카페"
+node index.js naver map "미용실"
 
-# Example searches - Smart Store
-node index.js smartstore "https://smartstore.naver.com/wodnr7762/products/8464846750"
-node index.js smartstore "https://smartstore.naver.com/store123/products/123456"
+# Example searches - Naver Smart Store
+node index.js naver smartstore "https://smartstore.naver.com/wodnr7762/products/8464846750"
+node index.js naver smartstore "https://smartstore.naver.com/store123/products/123456"
 
 # Example searches - Naver Shopping
 # "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug-crawling --no-first-run --disable-default-apps --disable-extensions
-node index.js navershopping "https://search.shopping.naver.com/catalog/51449387077?cat_id=50003299&frm=NVSCVUI&query=%EC%9D%98%EC%9E%90"
+node index.js naver shopping "https://search.shopping.naver.com/catalog/51449387077?cat_id=50003299&frm=NVSCVUI&query=%EC%9D%98%EC%9E%90"
 
 # Example searches - Coupang (Basic Mode)
 node index.js coupang vendor 1039646-1039649     # Vendor info collection
@@ -40,7 +39,17 @@ node index.js coupang combined-safe 1-2000000 3  # Safe collection with checkpoi
 node index.js coupang resume session_2025-09-04T15-30-45_abc123  # Resume interrupted session
 node index.js coupang complete session_2025-09-04T15-30-45_abc123 # Merge batch files
 
-# Note: maxResults is only used in map mode
+# BACKWARD COMPATIBILITY (shows warning but works)
+node index.js map "치킨"                         # ⚠️ Old format, use: node index.js naver map "치킨"
+node index.js smartstore "URL"                   # ⚠️ Old format, use: node index.js naver smartstore "URL"
+node index.js navershopping "URL"                # ⚠️ Old format, use: node index.js naver shopping "URL"
+
+# Show usage help
+node index.js              # General usage
+node index.js naver        # Naver-specific usage  
+node index.js coupang      # Coupang-specific usage
+
+# Note: Use MAX_PAGES environment variable to control scraping depth
 ```
 
 ### Configuration
@@ -52,13 +61,41 @@ set LOG_REQUESTS=false      # Disable request logging
 set LOG_RESPONSES=false     # Disable response logging
 set LOG_ERRORS=false        # Disable error logging
 set LOG_DIRECTORY=custom    # Custom log directory
+
+# Environment variables for performance tuning
+set RATE_LIMIT_DELAY=300    # Rate limiting delay in ms (default: 200)
+set BATCH_SIZE=50           # Batch size for safe mode (default: 100)
+set MAX_PAGES=10            # Maximum pages to scrape for Naver (default: 5)
+set MAX_PRODUCTS=3          # Maximum products per vendor for Coupang (default: 5)
+set TIMEOUT=60000           # Request timeout in ms (default: 30000)
 ```
 
 ## Architecture
 
-### Core Components
+### New Unified CLI Structure (Post-Refactoring)
 
-#### Naver Map/Store Components
+#### Command Handlers
+- **Main Entry**: `index.js` (52 lines, 89% reduction from 475 lines)
+- **Common Modules**: `src/handlers/common/` - Shared utilities and configuration
+  - `config-loader.js`: Environment configuration and scraper options
+  - `cli-logger.js`: Consistent logging with timestamps and emoji
+  - `url-parsers.js`: URL parsing utilities (Naver Shopping, Coupang IDs)
+  - `usage-helper.js`: Help text and usage examples
+- **Naver Handlers**: `src/handlers/naver/` - All Naver-related scraping modes  
+  - `naver-handler.js`: Main router for Naver commands
+  - `map-handler.js`: Naver Map scraping logic
+  - `shopping-handler.js`: Naver Shopping browser automation
+  - `smartstore-handler.js`: Smart Store product extraction
+- **Coupang Handlers**: `src/handlers/coupang/` - All Coupang-related scraping modes
+  - `coupang-handler.js`: Main router for Coupang commands
+  - `vendor-handler.js`: Vendor information collection
+  - `product-handler.js`: Product listing collection  
+  - `combined-handler.js`: Combined vendor+product collection
+  - `session-handler.js`: Session management (resume/complete)
+
+### Legacy Core Components (Still Used)
+
+#### Naver Map/Store Components  
 - **NaverStoreScraper** (`src/core/NaverStoreScraper.js`): Main scraping engine that orchestrates the entire process
 - **CategoryDetector** (`src/core/CategoryDetector.js`): Automatically detects business category from search keywords
 - **GraphQLBuilder** (`src/graphql/GraphQLBuilder.js`): Builds category-specific GraphQL payloads using specialized payload classes
