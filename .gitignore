@@ -23,6 +23,7 @@ tmp/
 *.tmp
 checkpoints/
 archive/
+repomix-*
 
 # 백업 파일들
 *.bak
