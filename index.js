@@ -1,6 +1,6 @@
 // 환경별 .env 파일 로딩
 import dotenv from 'dotenv';
-import NaverStoreScraper from './src/scrapers/naver/naver-store-scraper.js';
+import NaverMapScraper from './src/scrapers/naver/naver-map-scraper.js';
 import NaverSmartStoreScraper from './src/scrapers/naver/naver-smart-store-scraper.js';
 import CoupangVendorScraper from './src/scrapers/coupang/vendor-scraper.js';
 import CoupangProductListScraper from './src/scrapers/coupang/product-list-scraper.js';
@@ -64,7 +64,7 @@ async function main() {
       }
       console.log();
 
-      const scraper = new NaverStoreScraper(scraperOptions);
+      const scraper = new NaverMapScraper(scraperOptions);
       const results = await scraper.searchStores(keywordOrUrl, maxResults);
 
       if (results.stores.length > 0) {

@@ -1,6 +1,9 @@
-import StorageService from '../../services/storage-service.js';
+import NaverMapService from '../../services/naver-map-service.js';
 
-class NaverStoreResponseParser {
+class NaverMapResponseParser {
+  constructor() {
+    this.naverMapService = new NaverMapService();
+  }
   parseStoresFromGraphQLResponse(responseData, page = 1) {
     try {
       const allStores = [];
@@ -10,7 +13,7 @@ class NaverStoreResponseParser {
       if (mainResponse?.data) {
         const mainStores = this.parseMainResponse(mainResponse.data);
         const normalizedMainStores = mainStores.map((store) => ({
-          ...StorageService.normalizeStoreData(store),
+          ...this.naverMapService.normalizeStoreData(store),
           type: 'organic',
         }));
         allStores.push(...normalizedMainStores);
@@ -22,7 +25,7 @@ class NaverStoreResponseParser {
       if (adsResponse?.data?.adBusinesses?.items) {
         const adBusinesses = adsResponse.data.adBusinesses.items;
         const normalizedAds = adBusinesses.map((ad) => ({
-          ...StorageService.normalizeStoreData(ad),
+          ...this.naverMapService.normalizeStoreData(ad),
           type: 'ad',
           adId: ad.adId,
         }));
@@ -53,4 +56,4 @@ class NaverStoreResponseParser {
   }
 }
 
-export default NaverStoreResponseParser;
+export default NaverMapResponseParser;

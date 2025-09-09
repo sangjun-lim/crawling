@@ -3,7 +3,6 @@ import stealth from 'puppeteer-extra-plugin-stealth';
 import AntiDetectionService from '../../services/anti-detection-service.js';
 import LoggerService from '../../services/logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
-import StorageService from '../../services/storage-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { FingerprintGenerator } from 'fingerprint-generator';
@@ -13,7 +12,6 @@ class NaverShoppingScraper {
     // 서비스 조합 (Composition 패턴)
     this.logger = new LoggerService(options);
     this.proxyService = new ProxyService(options);
-    this.storageService = new StorageService(options);
 
     this.options = {
       headless: options.headless ?? true,

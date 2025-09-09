@@ -1,23 +1,21 @@
 import HttpClient from '../../clients/http-client.js';
-import NaverLocationService from '../../services/naver-location-service.js';
+import NaverMapService from '../../services/naver-map-service.js';
 import GraphqlBuilder from '../../graphql/graphql-builder.js';
-import NaverStoreResponseParser from '../../parsers/naver/store-response-parser.js';
-import StorageService from '../../services/storage-service.js';
+import NaverMapResponseParser from '../../parsers/naver/map-response-parser.js';
 import LoggerService from '../../services/logger-service.js';
 import ProxyService from '../../services/proxy-service.js';
-import FileUtils from '../../utils/file-utils.js';
 import {
   DEFAULT_COORDS,
   DEFAULT_OPTIONS,
   API_URLS,
 } from '../../config/constants.js';
 
-class NaverStoreScraper {
+class NaverMapScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
     this.logger = new LoggerService(options);
     this.proxyService = new ProxyService(options);
-    this.storageService = new StorageService(options);
+    this.naverMapService = new NaverMapService(options);
 
     this.options = {
       timeout: options.timeout || 30000,
@@ -39,16 +37,15 @@ class NaverStoreScraper {
       ...options,
       proxy: this.proxyService.getHttpConfig(), // 프록시 설정 전달
     });
-    this.naverLocationService = new NaverLocationService();
     this.graphQLBuilder = new GraphqlBuilder();
-    this.responseParser = new NaverStoreResponseParser();
+    this.responseParser = new NaverMapResponseParser();
   }
 
   async searchStores(keyword, maxResults = null) {
     try {
       console.log(`"${keyword}" 검색 시작...`);
 
-      const coords = await this.naverLocationService.getLocationCoordinates(
+      const coords = await this.naverMapService.getLocationCoordinates(
         keyword,
         this.httpClient
       );
@@ -95,7 +92,7 @@ class NaverStoreScraper {
           `페이지 ${page}/${this.config.pagination.maxPages} 요청 중... (start: ${start}, display: ${displaySize})`
         );
 
-        const category = this.naverLocationService.detectCategory(keyword);
+        const category = this.naverMapService.detectCategory(keyword);
         const payload = this.graphQLBuilder.buildPayload(
           category,
           keyword,
@@ -232,24 +229,24 @@ class NaverStoreScraper {
   }
 
   async saveToCsv(data, filename) {
-    return FileUtils.saveToCsv(data, filename);
+    return this.naverMapService.saveToCsv(data, filename);
   }
 
   async saveToJson(data, filename) {
-    return FileUtils.saveToJson(data, filename);
+    return this.naverMapService.saveToJson(data, filename);
   }
 
   displayResults(data) {
-    return FileUtils.displayResults(data);
+    return this.naverMapService.displayResults(data);
   }
 
   // 테스트 호환성을 위한 메서드들
   detectCategory(keyword) {
-    return this.naverLocationService.detectCategory(keyword);
+    return this.naverMapService.detectCategory(keyword);
   }
 
   buildGraphQLPayload(keyword, display, start, adStart, coords = null) {
-    const category = this.naverLocationService.detectCategory(keyword);
+    const category = this.naverMapService.detectCategory(keyword);
     return this.graphQLBuilder.buildPayload(
       category,
       keyword,
@@ -261,4 +258,4 @@ class NaverStoreScraper {
   }
 }
 
-export default NaverStoreScraper;
+export default NaverMapScraper;
