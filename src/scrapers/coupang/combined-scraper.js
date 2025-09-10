@@ -560,13 +560,13 @@ class CoupangCombinedScraper {
       );
 
       // 배치 파일 정리 (옵션)
-      if (options.cleanupBatches !== false) {
-        // await this.storage.cleanupBatches(sessionId, false);
+      if (options.cleanupBatches === true) {
+        await this.storage.cleanupBatches(sessionId, false);
       }
 
       // 체크포인트 정리 (옵션)
-      if (options.cleanupCheckpoint !== false) {
-        // await this.checkpointManager.deleteCheckpoint(sessionId);
+      if (options.cleanupCheckpoint === true) {
+        await this.checkpointManager.deleteCheckpoint(sessionId);
       }
 
       console.log(`✅ 세션 완료: ${mergedFile}`);

@@ -1,5 +1,4 @@
 import { chromium } from 'playwright';
-import ProxyService from '../../services/proxy-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import LogUtils from '../../utils/log-utils.js';
@@ -8,7 +7,6 @@ class NaverSmartStoreScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
     this.logger = new LogUtils(options);
-    this.proxyService = new ProxyService(options);
 
     this.options = {
       headless: options.headless ?? false,

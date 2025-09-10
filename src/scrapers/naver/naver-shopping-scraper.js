@@ -1,7 +1,6 @@
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
 import AntiDetectionService from '../../services/anti-detection-service.js';
-import ProxyService from '../../services/proxy-service.js';
 import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import { FingerprintGenerator } from 'fingerprint-generator';
@@ -11,7 +10,6 @@ class NaverShoppingScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
     this.logger = new LogUtils(options);
-    this.proxyService = new ProxyService(options);
 
     this.options = {
       headless: options.headless ?? true,

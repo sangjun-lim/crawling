@@ -139,21 +139,16 @@ class NaverReceiptCaptchaSolver {
    * @returns {GoogleGenerativeAI|null} Gemini 클라이언트 객체
    */
   initGeminiClient() {
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      this.logger.logInfo('✅ Gemini API 클라이언트 초기화 완료');
-      return genAI;
-    } catch (error) {
-      this.logger.logError(
-        `Gemini API 클라이언트 초기화 실패: ${error.message}`
-      );
-      return null;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      const errorMsg = 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.';
+      this.logger.logError(`${errorMsg}`);
+      throw new Error(errorMsg);
     }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    this.logger.logSuccess('Gemini API 클라이언트 초기화 완료');
+    return genAI;
   }
 
   /**
@@ -540,80 +535,72 @@ class NaverReceiptCaptchaSolver {
    * @returns {Promise<boolean>} 시도 성공 여부
    */
   async attemptCaptchaSolve(page) {
-    try {
-      this.logger.logInfo('🎯 캡차 해결 시도 시작...');
+    this.logger.logInfo('🎯 캡차 해결 시도 시작...');
 
-      // 1. 캡차 페이지 확인
-      const isCaptcha = await this.isCaptchaPage(page);
-      if (!isCaptcha) {
-        this.logger.logInfo('ℹ️ 캡차 페이지가 아닙니다');
-        return true;
-      }
-
-      // 2. 이미지 URL과 질문 추출
-      const imageUrl = await this.getCaptchaImageUrl(page);
-      const questionText = await this.getCaptchaQuestionText(page);
-
-      if (!imageUrl || !questionText) {
-        throw new Error('이미지 URL 또는 질문 텍스트 추출 실패');
-      }
-
-      // 3. 이미지를 Base64로 변환
-      const base64Image = await this.convertImageToBase64(page, imageUrl);
-      if (!base64Image) {
-        throw new Error('이미지 Base64 변환 실패');
-      }
-
-      // 4. Gemini API로 분석
-      const geminiClient = this.initGeminiClient();
-      if (!geminiClient) {
-        throw new Error('Gemini API 클라이언트 초기화 실패');
-      }
-
-      const prompt = this.createCaptchaPrompt(questionText);
-      const answer = await this.analyzeImageWithGemini(
-        geminiClient,
-        base64Image,
-        prompt
-      );
-
-      if (!answer) {
-        throw new Error('Gemini API 분석 실패');
-      }
-
-      // 5. 답변 입력
-      const inputField = await this.findCaptchaInputField(page);
-      if (!inputField) {
-        throw new Error('입력 필드 찾기 실패');
-      }
-
-      const inputSuccess = await this.inputCaptchaAnswer(
-        page,
-        inputField,
-        answer
-      );
-      if (!inputSuccess) {
-        throw new Error('답변 입력 실패');
-      }
-
-      // 6. 제출
-      const submitButton = await this.findCaptchaSubmitButton(page);
-      if (!submitButton) {
-        throw new Error('제출 버튼 찾기 실패');
-      }
-
-      const submitResult = await this.submitCaptcha(page, submitButton);
-      if (!submitResult.success) {
-        throw new Error('캡차 제출 실패');
-      }
-
-      // 7. 해결 확인 (페이지 상태 기반)
-      const solved = await this.isCaptchaSolved(page);
-      return solved;
-    } catch (error) {
-      this.logger.logError(`캡차 해결 시도 실패: ${error.message}`);
-      return false;
+    // 1. 캡차 페이지 확인
+    const isCaptcha = await this.isCaptchaPage(page);
+    if (!isCaptcha) {
+      this.logger.logInfo('ℹ️ 캡차 페이지가 아닙니다');
+      return true;
     }
+
+    // 2. 이미지 URL과 질문 추출
+    const imageUrl = await this.getCaptchaImageUrl(page);
+    const questionText = await this.getCaptchaQuestionText(page);
+
+    if (!imageUrl || !questionText) {
+      throw new Error('이미지 URL 또는 질문 텍스트 추출 실패');
+    }
+
+    // 3. 이미지를 Base64로 변환
+    const base64Image = await this.convertImageToBase64(page, imageUrl);
+    if (!base64Image) {
+      throw new Error('이미지 Base64 변환 실패');
+    }
+
+    // 4. Gemini API로 분석
+    const geminiClient = this.initGeminiClient();
+
+    const prompt = this.createCaptchaPrompt(questionText);
+    const answer = await this.analyzeImageWithGemini(
+      geminiClient,
+      base64Image,
+      prompt
+    );
+
+    if (!answer) {
+      throw new Error('Gemini API 분석 실패');
+    }
+
+    // 5. 답변 입력
+    const inputField = await this.findCaptchaInputField(page);
+    if (!inputField) {
+      throw new Error('입력 필드 찾기 실패');
+    }
+
+    const inputSuccess = await this.inputCaptchaAnswer(
+      page,
+      inputField,
+      answer
+    );
+    if (!inputSuccess) {
+      throw new Error('답변 입력 실패');
+    }
+
+    // 6. 제출
+    const submitButton = await this.findCaptchaSubmitButton(page);
+    if (!submitButton) {
+      throw new Error('제출 버튼 찾기 실패');
+    }
+
+    const submitResult = await this.submitCaptcha(page, submitButton);
+    if (!submitResult.success) {
+      throw new Error('캡차 제출 실패');
+    }
+
+    // 7. 해결 확인 (페이지 상태 기반)
+    const solved = await this.isCaptchaSolved(page);
+    return solved;
   }
 
   /**

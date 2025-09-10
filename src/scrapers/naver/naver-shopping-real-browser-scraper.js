@@ -1,5 +1,4 @@
 import { connect } from 'puppeteer-real-browser';
-import ProxyService from '../../services/proxy-service.js';
 import NaverReceiptCaptchaSolver from '../../captcha/naver-receipt-captcha-solver.js';
 import NaverShoppingNextDataParser from '../../parsers/naver/shopping-next-data-parser.js';
 import fs from 'fs';
@@ -10,7 +9,6 @@ class NaverShoppingRealBrowserScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
     this.logger = new LogUtils(options);
-    this.proxyService = new ProxyService(options);
     this.captchaSolver = new NaverReceiptCaptchaSolver(options);
     this.dataParser = new NaverShoppingNextDataParser();
 
@@ -157,10 +155,6 @@ class NaverShoppingRealBrowserScraper {
   async randomWait(min = 800, max = 2500) {
     const waitTime = Math.floor(Math.random() * (max - min + 1)) + min;
     await new Promise((resolve) => setTimeout(resolve, waitTime));
-  }
-
-  async handleCaptchaAutomatically(page) {
-    return await this.captchaSolver.handleCaptchaAutomatically(page);
   }
 
   /**
@@ -347,7 +341,7 @@ class NaverShoppingRealBrowserScraper {
       }
 
       // 캡차 자동 처리
-      const captchaResult = await this.handleCaptchaAutomatically(this.page);
+      const captchaResult = await this.captchaSolver.handleCaptchaAutomatically(this.page);
 
       if (captchaResult.isCaptcha && !captchaResult.autoSolved) {
         new Error('캡차 실패입니다.');

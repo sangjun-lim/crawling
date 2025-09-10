@@ -30,7 +30,7 @@ function createScraperOptions() {
     maxRedirects: parseInt(process.env.MAX_REDIRECTS) || 5,
 
     // 프록시 옵션
-    proxy: process.env.PROXY_SERVER || null,
+    proxies: process.env.PROXIES ? process.env.PROXIES.split(',').map(proxy => proxy.trim()).filter(Boolean) : null,
 
     // Rate limiting 옵션
     rateLimitDelay: parseInt(process.env.RATE_LIMIT_DELAY) || 200, // 기본 200ms

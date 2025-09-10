@@ -3,7 +3,6 @@ import NaverMapService from '../../services/naver-map-service.js';
 import GraphqlBuilder from '../../graphql/graphql-builder.js';
 import NaverMapResponseParser from '../../parsers/naver/map-response-parser.js';
 import HttpRequestLoggerService from '../../services/http-request-logger-service.js';
-import ProxyService from '../../services/proxy-service.js';
 import {
   DEFAULT_COORDS,
   DEFAULT_OPTIONS,
@@ -14,7 +13,6 @@ class NaverMapScraper {
   constructor(options = {}) {
     // 서비스 조합 (Composition 패턴)
     this.logger = new HttpRequestLoggerService(options);
-    this.proxyService = new ProxyService(options);
     this.naverMapService = new NaverMapService(options);
 
     this.options = {
@@ -33,10 +31,7 @@ class NaverMapScraper {
       ...options,
     };
 
-    this.httpClient = new HttpClient({
-      ...options,
-      proxy: this.proxyService.getHttpConfig(), // 프록시 설정 전달
-    });
+    this.httpClient = new HttpClient(options);
     this.graphQLBuilder = new GraphqlBuilder();
     this.responseParser = new NaverMapResponseParser();
   }

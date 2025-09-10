@@ -21,6 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@playwright/test": "^1.55.0",
     "axios": "^1.11.0",
     "axios-cookiejar-support": "^6.0.4",
     "cheerio": "^1.0.0-rc.12",
@@ -29,7 +30,6 @@
     "fingerprint-generator": "^2.1.70",
     "node-curl-impersonate": "^1.5.4",
     "node-tls-client": "^2.1.0",
-    "playwright": "^1.55.0",
     "playwright-extra": "^4.3.6",
     "playwright-extra-plugin-stealth": "^0.0.1",
     "puppeteer": "^24.17.0",

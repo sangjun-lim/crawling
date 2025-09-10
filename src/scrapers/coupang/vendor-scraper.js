@@ -47,11 +47,21 @@ class CoupangVendorScraper {
 
       const response = await this.httpClient.get(url, {}, headers);
 
-      // 응답 헤더 로그 출력
+      // Rate limit 정보만 간단하게 출력
+      const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
+      const rateLimitRequested = response.headers['x-ratelimit-requested-tokens'];
+      const rateLimitCapacity = response.headers['x-ratelimit-burst-capacity'];
+      const rateLimitRate = response.headers['x-ratelimit-replenish-rate'];
+      
       console.log(
-        `[RESPONSE HEADERS] ${vendorId}:`,
-        JSON.stringify(response.headers, null, 2)
+        `[RATE LIMIT] ${vendorId}: remaining=${rateLimitRemaining}, requested=${rateLimitRequested}, capacity=${rateLimitCapacity}, rate=${rateLimitRate}`
       );
+
+      // 기존 응답 헤더 전체 출력은 주석 처리
+      // console.log(
+      //   `[RESPONSE HEADERS] ${vendorId}:`,
+      //   JSON.stringify(response.headers, null, 2)
+      // );
 
       return {
         success: true,

@@ -15,19 +15,12 @@
       "Bash(mv:*)",
       "Bash(npm uninstall:*)",
       "WebFetch(domain:www.npmjs.com)",
-      "mcp__playwright__browser_navigate",
-      "mcp__playwright__browser_click",
-      "mcp__playwright__browser_type",
-      "mcp__playwright__browser_snapshot",
-      "mcp__playwright__browser_take_screenshot",
-      "mcp__playwright__browser_evaluate",
-      "mcp__playwright__browser_close",
       "Bash(grep:*)",
       "mcp__context7__resolve-library-id",
-      "mcp__playwright__browser_network_requests",
       "mcp__sequential-thinking__sequentialthinking",
       "mcp__context7__get-library-docs",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Playwright"
     ],
     "deny": [],
     "ask": []

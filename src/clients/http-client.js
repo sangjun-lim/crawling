@@ -21,12 +21,17 @@ class HttpClient {
     this.currentProxyIndex = 0;
     this.proxyStats = {}; // 프록시별 성공/실패 통계
 
+    if (this.proxies.length > 0) {
+      console.log(`🌐 프록시 ${this.proxies.length}개 로드됨`);
+    }
+
     // 쿠키 지원 설정
     this.cookieJar = new CookieJar();
 
     this.session = this.createHttpSession();
     this.setupInterceptors();
   }
+
 
   createHttpSession() {
     const axiosInstance = axios.create({

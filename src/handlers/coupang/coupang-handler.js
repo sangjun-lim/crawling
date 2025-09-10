@@ -9,6 +9,9 @@ export async function handleCoupang(subMode, args, config) {
   
   // 쿠팡 요청/응답 로그 끄기
   config.scraperOptions.enableLogging = false;
+  // config.scraperOptions.proxies = [
+  //   'http://172.30.1.7:9090'
+  // ];
 
   switch (subMode) {
     case 'vendor':

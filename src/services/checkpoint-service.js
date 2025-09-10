@@ -190,6 +190,7 @@ class CheckpointService {
             currentBatch: 0,
             batchSize: options.batchSize || 100,
             maxProductsPerVendor: options.maxProductsPerVendor || 5,
+            rateLimitDelay: options.rateLimitDelay || 200,
             status: 'running',
             vendorIds: vendorIds,
             processedVendors: [],
