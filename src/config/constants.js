@@ -26,7 +26,7 @@ export const DEFAULT_OPTIONS = {
     timeout: 30000,
     maxRedirects: 5,
     logging: {
-      enabled: true,
+      enableLogging: true,
       logRequests: true,
       logResponses: true,
       logErrors: true,

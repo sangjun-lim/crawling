@@ -4,7 +4,7 @@ import path from 'path';
 class HttpRequestLoggerService {
   constructor(options = {}) {
     this.config = {
-      enabled: process.env.ENABLE_LOGGING !== 'false' && options.enableLogging !== false,
+      enableLogging: process.env.ENABLE_LOGGING !== 'false' && options.enableLogging !== false,
       logRequests: process.env.LOG_REQUESTS !== 'false' && options.logRequests !== false,
       logResponses: process.env.LOG_RESPONSES !== 'false' && options.logResponses !== false,
       logErrors: process.env.LOG_ERRORS !== 'false' && options.logErrors !== false,
@@ -15,7 +15,7 @@ class HttpRequestLoggerService {
   }
 
   ensureLogDirectories() {
-    if (!this.config.enabled) return;
+    if (!this.config.enableLogging) return;
 
     const logDir = this.config.logDirectory;
     const subDirs = ['requests', 'responses', 'errors'];
@@ -39,7 +39,7 @@ class HttpRequestLoggerService {
   }
 
   async writeLogFile(type, data, filename = null) {
-    if (!this.config.enabled) return;
+    if (!this.config.enableLogging) return;
 
     try {
       const logDir = this.config.logDirectory;
@@ -54,7 +54,7 @@ class HttpRequestLoggerService {
   }
 
   logRequest(config) {
-    if (!this.config.enabled || !this.config.logRequests) return;
+    if (!this.config.enableLogging || !this.config.logRequests) return;
 
     const requestData = {
       timestamp: new Date().toISOString(),
@@ -76,7 +76,7 @@ class HttpRequestLoggerService {
   }
 
   logResponse(response) {
-    if (!this.config.enabled || !this.config.logResponses) return;
+    if (!this.config.enableLogging || !this.config.logResponses) return;
 
     const responseData = {
       timestamp: new Date().toISOString(),
@@ -103,7 +103,7 @@ class HttpRequestLoggerService {
   }
 
   logError(error, type = 'general_error') {
-    if (!this.config.enabled || !this.config.logErrors) return;
+    if (!this.config.enableLogging || !this.config.logErrors) return;
 
     const errorData = {
       timestamp: new Date().toISOString(),
