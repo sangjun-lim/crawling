@@ -3,6 +3,7 @@ import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
 import { HTTP_HEADERS, DEFAULT_OPTIONS } from '../config/constants.js';
 import HttpRequestLoggerService from '../services/http-request-logger-service.js';
+import ScrapingError from '../errors/scraping-error.js';
 
 class HttpClient {
   constructor(options = {}) {
@@ -131,14 +132,6 @@ class HttpClient {
         }
 
         this.httpLogger.logResponse(response);
-
-        if (response.request._redirects?.length > 0) {
-          console.log(
-            `리다이렉트 발생: ${response.request._redirects.length}번`
-          );
-          console.log(`최종 URL: ${response.request.res.responseUrl}`);
-        }
-
         return response;
       },
       (error) => {
@@ -154,15 +147,15 @@ class HttpClient {
           }
         }
 
-        this.httpLogger.logError(error, 'response_error');
-
-        if (error.response?.status >= 300 && error.response?.status < 400) {
-          console.log(
-            `리다이렉트 응답 (${error.response.status}):`,
-            error.response.headers.location
-          );
+        // ScrapingError로 변환 시도
+        const scrapingError = ScrapingError.fromAxiosError(error);
+        if (scrapingError) {
+          this.httpLogger.logError(scrapingError, 'response_error');
+          return Promise.reject(scrapingError);
         }
 
+        // 일반 에러는 기존 방식
+        this.httpLogger.logError(error, 'response_error');
         return Promise.reject(error);
       }
     );
