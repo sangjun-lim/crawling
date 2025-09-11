@@ -291,6 +291,11 @@ class CoupangCombinedScraper {
       this.httpClient.logProxyStats();
     }
 
+    if (results.length > 0) {
+      const filename = `coupang_combined_${vendorIds[0]}-${vendorIds[vendorIds.length - 1]}_${Date.now()}`;
+      await this.storage.saveCombinedAsCSV(results, filename);
+    }
+
     return results;
   }
 

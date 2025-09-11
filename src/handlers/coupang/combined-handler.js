@@ -62,7 +62,6 @@ export async function runCombinedMode(args, config, isSafeMode = false) {
 
   } else {
     // 일반 모드
-    const storage = new CoupangStorageService({ storageType: 'csv' });
     let results;
 
     switch (parsedRange.type) {
@@ -88,11 +87,5 @@ export async function runCombinedMode(args, config, isSafeMode = false) {
         );
         break;
     }
-
-    await storage.save(
-      results,
-      'combined',
-      `coupang_combined_${range}_${Date.now()}`
-    );
   }
 }
