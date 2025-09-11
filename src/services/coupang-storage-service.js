@@ -309,7 +309,7 @@ class CoupangStorageService {
 
         await csvWriter.writeRecords(csvData);
         
-        console.log(`✅ 통합 데이터 저장 완료: ${filePath}`);
+        console.log(`🎯 통합 데이터 저장 완료: ${filePath}`);
         console.log(`   총 ${results.length}행 저장`);
         
         return filePath;
