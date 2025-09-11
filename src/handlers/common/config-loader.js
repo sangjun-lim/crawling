@@ -4,9 +4,9 @@ export function loadConfiguration() {
   const env = process.env.NODE_ENV || 'development';
 
   // 환경별 .env 파일 로딩 (우선순위: 환경별 → 로컬 → 기본)
-  dotenv.config({ path: `.env.${env}` });
-  dotenv.config({ path: '.env.local' });
-  dotenv.config({ path: '.env' });
+  dotenv.config({ path: `.env.${env}`, quiet: true });
+  dotenv.config({ path: '.env.local', quiet: true });
+  dotenv.config({ path: '.env', quiet: true });
 
   return {
     env,
