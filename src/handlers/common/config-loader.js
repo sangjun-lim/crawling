@@ -17,7 +17,7 @@ export function loadConfiguration() {
 function createScraperOptions() {
   return {
     // 로깅 옵션
-    enableLogging: process.env.ENABLE_LOGGING !== 'false', // 기본 활성화
+    enableLogging: process.env.ENABLE_LOGGING !== 'true', // 기본 비활성화
     logRequests: process.env.LOG_REQUESTS !== 'false',
     logResponses: process.env.LOG_RESPONSES !== 'false',
     logErrors: process.env.LOG_ERRORS !== 'false',
